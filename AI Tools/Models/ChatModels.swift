@@ -1,5 +1,35 @@
 import Foundation
 
+enum AIProvider: String, CaseIterable, Identifiable, Codable {
+    case gemini
+    case chatGPT
+    case anthropic
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .gemini: return "Gemini"
+        case .chatGPT: return "ChatGPT"
+        case .anthropic: return "Anthropic"
+        }
+    }
+
+    var apiKeyPlaceholder: String {
+        switch self {
+        case .gemini: return "Gemini API Key"
+        case .chatGPT: return "OpenAI API Key"
+        case .anthropic: return "Anthropic API Key"
+        }
+    }
+
+    var isImplemented: Bool {
+        switch self {
+        case .gemini, .chatGPT, .anthropic: return true
+        }
+    }
+}
+
 enum MessageRole: String, Codable {
     case user
     case assistant
@@ -36,7 +66,7 @@ struct GeneratedImage: Identifiable {
     }
 }
 
-enum GeneratedMediaKind: String {
+enum GeneratedMediaKind: String, Codable {
     case image
     case audio
     case video
@@ -47,7 +77,7 @@ enum GeneratedMediaKind: String {
     case file
 }
 
-struct GeneratedMedia: Identifiable {
+struct GeneratedMedia: Identifiable, Codable {
     let id: UUID
     let kind: GeneratedMediaKind
     let mimeType: String
@@ -97,6 +127,7 @@ extension ChatMessage: Codable {
         case role
         case text
         case attachments
+        case generatedMedia
     }
 
     init(from decoder: Decoder) throws {
@@ -105,7 +136,7 @@ extension ChatMessage: Codable {
         role = try container.decode(MessageRole.self, forKey: .role)
         text = try container.decode(String.self, forKey: .text)
         attachments = try container.decode([AttachmentSummary].self, forKey: .attachments)
-        generatedMedia = []
+        generatedMedia = try container.decodeIfPresent([GeneratedMedia].self, forKey: .generatedMedia) ?? []
     }
 
     func encode(to encoder: Encoder) throws {
@@ -114,6 +145,7 @@ extension ChatMessage: Codable {
         try container.encode(role, forKey: .role)
         try container.encode(text, forKey: .text)
         try container.encode(attachments, forKey: .attachments)
+        try container.encode(generatedMedia, forKey: .generatedMedia)
     }
 }
 

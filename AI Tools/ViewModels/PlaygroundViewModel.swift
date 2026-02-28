@@ -133,6 +133,7 @@ final class PlaygroundViewModel: ObservableObject {
 
         modelID = conversation.modelID
         selectedPreset = ModelPreset(rawValue: modelID) ?? .custom
+        persistCurrentModelID()
         messages = conversation.messages
         errorMessage = nil
     }
@@ -154,16 +155,22 @@ final class PlaygroundViewModel: ObservableObject {
     }
 
     func refreshModels() async {
-        guard !apiKey.isEmpty else {
+        guard canLoadModels else {
+            errorMessage = "Model loading is currently implemented for Gemini."
+            return
+        }
+
+        guard !currentAPIKey.isEmpty else {
             errorMessage = "Missing API key."
             return
         }
 
         do {
-            availableModels = try await serviceFactory(apiKey).listGenerateContentModels()
+            availableModels = try await serviceFactory(selectedProvider, currentAPIKey).listGenerateContentModels()
             if !availableModels.contains(modelID), let first = availableModels.first {
                 modelID = first
                 selectedPreset = .custom
+                persistCurrentModelID()
             }
         } catch {
             errorMessage = error.localizedDescription
@@ -172,7 +179,11 @@ final class PlaygroundViewModel: ObservableObject {
 
     func send(text: String, attachments: [PendingAttachment]) async {
         errorMessage = nil
-        guard !apiKey.isEmpty else {
+        guard canSendRequests else {
+            errorMessage = "\(selectedProvider.displayName) is not wired yet. Switch to Gemini to send."
+            return
+        }
+        guard !currentAPIKey.isEmpty else {
             errorMessage = "Missing API key."
             return
         }
@@ -190,7 +201,7 @@ final class PlaygroundViewModel: ObservableObject {
         defer { isLoading = false }
 
         do {
-            let reply = try await serviceFactory(apiKey).generateReply(
+            let reply = try await serviceFactory(selectedProvider, currentAPIKey).generateReply(
                 modelID: modelID,
                 systemInstruction: systemInstruction,
                 messages: messages,
@@ -205,6 +216,34 @@ final class PlaygroundViewModel: ObservableObject {
             upsertCurrentConversation()
         } catch {
             errorMessage = error.localizedDescription
+        }
+    }
+
+    private func autoLoadModelsIfPossible() async {
+        guard canLoadModels else { return }
+        guard !currentAPIKey.isEmpty else { return }
+        await refreshModels()
+    }
+
+    private func persistCurrentModelID() {
+        switch selectedProvider {
+        case .gemini:
+            geminiModelID = modelID
+        case .chatGPT:
+            openAIModelID = modelID
+        case .anthropic:
+            anthropicModelID = modelID
+        }
+    }
+
+    private func providerModelID(_ provider: AIProvider) -> String {
+        switch provider {
+        case .gemini:
+            return geminiModelID
+        case .chatGPT:
+            return openAIModelID
+        case .anthropic:
+            return anthropicModelID
         }
     }
 
