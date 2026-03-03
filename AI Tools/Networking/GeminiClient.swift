@@ -27,7 +27,6 @@ struct GeminiClient: GeminiServicing {
         repeat {
             var components = URLComponents(string: "https://generativelanguage.googleapis.com/v1beta/models")
             components?.queryItems = [
-                URLQueryItem(name: "key", value: apiKey),
                 URLQueryItem(name: "pageSize", value: "50")
             ]
             if let token = pageToken, !token.isEmpty {
@@ -39,6 +38,7 @@ struct GeminiClient: GeminiServicing {
 
             var request = URLRequest(url: url)
             request.timeoutInterval = 25
+            request.setValue(apiKey, forHTTPHeaderField: "x-goog-api-key")
 
             let (data, response) = try await performWithRetry(request: request, maxAttempts: 3)
             guard let http = response as? HTTPURLResponse else {
@@ -73,13 +73,14 @@ struct GeminiClient: GeminiServicing {
         latestUserAttachments: [PendingAttachment]
     ) async throws -> ModelReply {
         let escapedModel = modelID.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? modelID
-        guard let url = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/\(escapedModel):generateContent?key=\(apiKey)") else {
+        guard let url = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/\(escapedModel):generateContent") else {
             throw GeminiError.invalidRequest
         }
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(apiKey, forHTTPHeaderField: "x-goog-api-key")
 
         let lastUserIndex = messages.lastIndex { $0.role == .user }
         let payload = GeminiGenerateRequest(
