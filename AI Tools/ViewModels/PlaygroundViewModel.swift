@@ -210,11 +210,12 @@ final class PlaygroundViewModel: ObservableObject {
                 messages: messages,
                 latestUserAttachments: attachments
             )
+            let persistedMedia = persistGeneratedMediaInPlace(reply.generatedMedia).media
             messages.append(ChatMessage(
                 role: .assistant,
                 text: reply.text,
                 attachments: [],
-                generatedMedia: reply.generatedMedia
+                generatedMedia: persistedMedia
             ))
             upsertCurrentConversation()
         } catch {
@@ -311,6 +312,25 @@ final class PlaygroundViewModel: ObservableObject {
         }
     }
 
+    private static func makeMediaStoreDirectoryURL() -> URL? {
+        do {
+            let fileManager = FileManager.default
+            let appSupport = try fileManager.url(
+                for: .applicationSupportDirectory,
+                in: .userDomainMask,
+                appropriateFor: nil,
+                create: true
+            )
+            let mediaFolder = appSupport
+                .appendingPathComponent("AI Tools", isDirectory: true)
+                .appendingPathComponent("media", isDirectory: true)
+            try fileManager.createDirectory(at: mediaFolder, withIntermediateDirectories: true)
+            return mediaFolder
+        } catch {
+            return nil
+        }
+    }
+
     private func persistCurrentModelID() {
         switch selectedProvider {
         case .gemini:
@@ -390,11 +410,100 @@ final class PlaygroundViewModel: ObservableObject {
             errorMessage = "Unable to resolve conversation storage path."
             return
         }
+        let normalized = normalizeConversations(savedConversations)
+        if normalized.didChange {
+            savedConversations = normalized.conversations
+        }
         guard let data = try? JSONEncoder().encode(savedConversations) else { return }
         do {
             try data.write(to: conversationStoreURL, options: .atomic)
         } catch {
             errorMessage = "Failed to persist conversations: \(error.localizedDescription)"
         }
+    }
+
+    private func normalizeConversations(_ conversations: [SavedConversation]) -> (conversations: [SavedConversation], didChange: Bool) {
+        var didChange = false
+        let normalized = conversations.map { conversation in
+            var mutable = conversation
+            let normalizedMessages = normalizeMessages(conversation.messages)
+            mutable.messages = normalizedMessages.messages
+            didChange = didChange || normalizedMessages.didChange
+            return mutable
+        }
+        return (normalized, didChange)
+    }
+
+    private func normalizeMessages(_ messages: [ChatMessage]) -> (messages: [ChatMessage], didChange: Bool) {
+        var didChange = false
+        let normalized = messages.map { message in
+            let normalizedMedia = persistGeneratedMediaInPlace(message.generatedMedia)
+            didChange = didChange || normalizedMedia.didChange
+            if normalizedMedia.didChange {
+                return ChatMessage(
+                    id: message.id,
+                    role: message.role,
+                    text: message.text,
+                    attachments: message.attachments,
+                    generatedMedia: normalizedMedia.media
+                )
+            }
+            return message
+        }
+        return (normalized, didChange)
+    }
+
+    private func persistGeneratedMediaInPlace(_ mediaItems: [GeneratedMedia]) -> (media: [GeneratedMedia], didChange: Bool) {
+        guard !mediaItems.isEmpty else { return (mediaItems, false) }
+        guard let mediaStoreDirectoryURL else { return (mediaItems, false) }
+
+        var didChange = false
+        var normalized: [GeneratedMedia] = []
+        normalized.reserveCapacity(mediaItems.count)
+
+        for media in mediaItems {
+            guard let base64 = media.base64Data, !base64.isEmpty else {
+                normalized.append(media)
+                continue
+            }
+
+            guard let data = Data(base64Encoded: base64) else {
+                normalized.append(media)
+                continue
+            }
+
+            let fileURL = mediaStoreDirectoryURL
+                .appendingPathComponent(media.id.uuidString)
+                .appendingPathExtension(media.mimeType.fileExtensionHint)
+
+            do {
+                if !FileManager.default.fileExists(atPath: fileURL.path) {
+                    try data.write(to: fileURL, options: .atomic)
+                }
+                normalized.append(
+                    GeneratedMedia(
+                        id: media.id,
+                        kind: media.kind,
+                        mimeType: media.mimeType,
+                        base64Data: nil,
+                        remoteURL: fileURL
+                    )
+                )
+                didChange = true
+            } catch {
+                normalized.append(media)
+            }
+        }
+
+        return (normalized, didChange)
+    }
+}
+
+private extension String {
+    var fileExtensionHint: String {
+        let parts = split(separator: "/")
+        guard let last = parts.last else { return "bin" }
+        let cleaned = String(last).replacingOccurrences(of: "+xml", with: "")
+        return cleaned.isEmpty ? "bin" : cleaned
     }
 }
