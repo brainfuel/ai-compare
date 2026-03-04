@@ -125,3 +125,6 @@ yarn-error.log
 .idea/
 .vscode/
 *.reveal
+
+# Local AI tool worktrees
+.claude/worktrees/
