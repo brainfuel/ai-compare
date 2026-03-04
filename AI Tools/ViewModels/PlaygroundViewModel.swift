@@ -131,13 +131,10 @@ final class PlaygroundViewModel: ObservableObject {
             return
         }
 
-        let providerChanged = selectedProvider != conversation.provider
         selectedProvider = conversation.provider
         providerStore = conversation.provider.rawValue
-        if providerChanged {
-            availableModels = []
-        }
         modelID = conversation.modelID
+        availableModels = cachedModels(for: conversation.provider, including: conversation.modelID)
         persistCurrentModelID()
         messages = conversation.messages
         errorMessage = nil
@@ -172,15 +169,7 @@ final class PlaygroundViewModel: ObservableObject {
             return
         }
 
-        do {
-            availableModels = try await serviceFactory(selectedProvider, currentAPIKey).listGenerateContentModels()
-            if !availableModels.contains(modelID), let first = availableModels.first {
-                modelID = first
-                persistCurrentModelID()
-            }
-        } catch {
-            errorMessage = error.localizedDescription
-        }
+        await fetchModels(for: selectedProvider, reportErrorsForSelectedProvider: true)
     }
 
     func send(text: String, attachments: [PendingAttachment]) async {
