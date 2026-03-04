@@ -172,6 +172,8 @@ struct ContentView: View {
                     if viewModel.isLoading {
                         HStack {
                             ProgressView()
+                                .controlSize(.small)
+                                .scaleEffect(0.82)
                             Text("Thinking...")
                                 .foregroundStyle(.secondary)
                         }
@@ -226,8 +228,9 @@ struct ContentView: View {
             }
 
             TextEditor(text: $prompt)
-                .frame(minHeight: 90, maxHeight: 150)
                 .focused($inputFocused)
+                .padding(8)
+                .frame(minHeight: 90, maxHeight: 150)
                 .overlay {
                     RoundedRectangle(cornerRadius: 8)
                         .stroke(Color.secondary.opacity(0.3))
