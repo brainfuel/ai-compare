@@ -1,47 +1,50 @@
 # AI Tools
 
-A SwiftUI AI playground app for chatting with multiple providers from one interface.
+A SwiftUI AI playground app for chatting with multiple providers from one interface, in either single-chat or side-by-side compare mode.
 
-## Screenshot
+## Screenshots
 
-![AI Tools app screenshot](docs/images/screenshot1.png)
+![AI Tools app screenshot 1](docs/images/screenshot1.png)
+![AI Tools app screenshot 2](docs/images/screenshot2.png)
 
 ## Overview
 
 AI Tools lets you:
 
 - switch between Gemini, OpenAI, and Anthropic
-- load available models from each provider
-- keep local chat history with searchable conversations
-- send prompts with optional file attachments
+- run in `Single` mode (normal chat) or `Compare` mode (same prompt across providers)
+- load and cache available models per provider
+- keep local history with searchable threads
+- send prompts with optional attachments
 - view and save generated media (images, audio, video, PDF, text, JSON, CSV)
 
 ## Features
 
 - Unified chat UI across providers
+- Segmented `Single` / `Compare` workspace modes
 - Provider-specific API keys in Keychain
 - Provider + selected model saved per conversation
-- Conversation sidebar with new/delete/search
+- Mode-aware sidebar with new/delete/search and separate single/compare thread lists
 - Markdown rendering for assistant responses
 - Cached model lists per provider (instant when switching chats/providers)
 - Startup model prefetch for providers that already have API keys
 - Attachment import with image preprocessing (center-crop to square, resize up to 1280x1280, JPEG encode)
 - 18 MB attachment size limit per file
 - Media output viewer with Save export flow
-- Token usage + estimated cost summaries for session, last 24h, last 7d, and last 30d
+- Token usage rows per response plus usage stats sheet (session, 24h, 7d, 30d)
 
 ## Provider Support
 
 | Provider | Chat | Model List | Attachments | Media Output |
 |---|---|---|---|---|
 | Gemini | Yes | Yes | Yes | Yes |
-| OpenAI | Yes | Yes | Not sent yet | Image generation models supported |
-| Anthropic | Yes | Yes | Not sent yet | Text only |
+| OpenAI | Yes | Yes | Images supported (non-image files skipped) | Image generation models supported |
+| Anthropic | Yes | Yes | Images supported (non-image files skipped) | Text only |
 
 Notes:
 
 - OpenAI image generation is used automatically when an image model ID is selected (for example `gpt-image-*` or `dall-e-*`).
-- For OpenAI and Anthropic, attachments are currently acknowledged in-chat but not uploaded to those APIs yet.
+- Compare mode sends the same prompt/attachments to all ready providers (API key + selected model).
 
 ## Requirements
 
@@ -67,31 +70,31 @@ xcodebuild -project "AI Tools.xcodeproj" -scheme "AI Tools" -configuration Debug
 
 ## Usage
 
-1. Select a provider in the **Connection** section.
-2. Paste the provider API key.
-3. (Optional) Click **Load Models** to refresh provider models.
-4. Choose a model from **Available Models**.
-5. Model lists appear immediately from cache when switching chats/providers.
-6. Add system instructions if needed.
-7. Type a prompt, optionally attach files, then click **Send**.
-8. Use the chat history sidebar to reopen prior conversations.
-9. See rolling usage summaries (24h/7d/30d) near the composer footer.
+1. Choose `Single` or `Compare` at the top of the detail view.
+2. In `Single`, select a provider in **Connection** and paste the provider API key.
+3. Click **Load Models** (optional) and pick a model from **Available Models**.
+4. Type a prompt, optionally attach files, then click **Send**.
+5. Click the chart icon in the top-right toolbar for usage/cost stats.
+6. In `Compare`, pick model(s) per provider column, then use **Send All** to run one prompt across providers side-by-side.
+7. Use the left sidebar to reopen threads; it automatically shows single threads in `Single` mode and compare threads in `Compare` mode.
 
 ## Data Storage
 
 - API keys are stored securely in the system Keychain.
-- Selected provider/model/system-instruction and model-list caches are stored locally using `@AppStorage` (UserDefaults).
-- Conversations are stored locally with SwiftData.
+- Single-chat conversations are stored locally with SwiftData.
+- Compare-mode conversations are stored locally in `@AppStorage` as JSON (`compare_conversations_v1`).
+- Model selections and model-list caches are stored locally with `@AppStorage`.
 - No server-side app backend is included in this project.
 
 ## Testing
 
-This project includes unit tests for `PlaygroundViewModel`, including:
+This project includes unit tests for `PlaygroundViewModel` and request-body behavior, including:
 
 - cached models shown immediately when switching conversations/providers
 - startup model prefetch behavior
 - one-time launch prefetch guard
 - rolling token/cost aggregation (24h/7d/30d), including legacy timestamp fallback and unsaved current-chat data
+- OpenAI image attachment encoding in chat request bodies
 
 Run tests:
 
@@ -114,7 +117,8 @@ xcodebuild -project "AI Tools.xcodeproj" -scheme "AI Tools" -destination "platfo
 
 ## Known Limitations
 
-- OpenAI and Anthropic attachment upload is not implemented yet.
+- OpenAI and Anthropic currently send image attachments only; non-image attachments are skipped.
+- Gemini and Anthropic currently return final responses (not token-by-token UI streaming).
 
 ## License
 
