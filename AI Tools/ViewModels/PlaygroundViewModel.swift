@@ -29,14 +29,9 @@ final class PlaygroundViewModel: ObservableObject {
     private let conversationStore: ConversationStore?
     private var didAutoLoadModels = false
     private var apiKeysByProvider: [AIProvider: String] = [:]
+    private var availableModelsByProvider: [AIProvider: [String]] = [:]
     private var pendingAPIKeyPersistTasks: [AIProvider: Task<Void, Never>] = [:]
     private var pendingConversationSaveTask: Task<Void, Never>?
-
-    private static let legacyAPIKeyDefaultsKeys: [AIProvider: String] = [
-        .gemini: "gemini_api_key",
-        .chatGPT: "openai_api_key",
-        .anthropic: "anthropic_api_key"
-    ]
 
     init(
         serviceFactory: @escaping (AIProvider, String) -> GeminiServicing = { provider, key in
@@ -50,23 +45,22 @@ final class PlaygroundViewModel: ObservableObject {
             }
         },
         keychainStore: KeychainStore = KeychainStore()
-    ) {
+        ) {
         self.serviceFactory = serviceFactory
         self.keychainStore = keychainStore
-        if let legacyConversationStoreURL = Self.makeLegacyConversationStoreURL(),
-           let mediaStoreDirectoryURL = Self.makeMediaStoreDirectoryURL() {
+        if let mediaStoreDirectoryURL = Self.makeMediaStoreDirectoryURL() {
             self.conversationStore = ConversationStore(
-                legacyStoreURL: legacyConversationStoreURL,
                 mediaStoreDirectoryURL: mediaStoreDirectoryURL
             )
         } else {
             self.conversationStore = nil
         }
-        UserDefaults.standard.removeObject(forKey: "gemini_chat_history_v1")
         loadAPIKeysFromSecureStorage()
+        loadModelCachesFromStorage()
         let provider = AIProvider(rawValue: providerStore) ?? .gemini
         selectedProvider = provider
         modelID = providerModelID(provider)
+        availableModels = cachedModels(for: provider, including: modelID)
         Task { [weak self] in
             await self?.loadSavedConversations()
         }
