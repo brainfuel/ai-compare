@@ -30,71 +30,112 @@ struct AnthropicClient: GeminiServicing {
         return decoded.data.map(\.id)
     }
 
-    func generateReply(
+    func generateReplyStream(
         modelID: String,
         systemInstruction: String,
         messages: [ChatMessage],
         latestUserAttachments: [PendingAttachment]
-    ) async throws -> ModelReply {
-        guard let url = URL(string: "https://api.anthropic.com/v1/messages") else {
-            throw GeminiError.invalidRequest
+    ) -> AsyncThrowingStream<ModelReply, Error> {
+        AsyncThrowingStream { continuation in
+            Task {
+                do {
+                    guard let url = URL(string: "https://api.anthropic.com/v1/messages") else {
+                        throw GeminiError.invalidRequest
+                    }
+
+                    var request = URLRequest(url: url)
+                    request.httpMethod = "POST"
+                    request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
+                    request.setValue(apiVersion, forHTTPHeaderField: "anthropic-version")
+                    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                    request.timeoutInterval = 120
+
+                    let payloadMessages = normalizedPayloadMessages(
+                        from: messages,
+                        latestUserAttachments: latestUserAttachments
+                    )
+                    guard !payloadMessages.isEmpty else {
+                        throw GeminiError.api("Cannot send an empty conversation to Anthropic.")
+                    }
+
+                    let payload = AnthropicMessagesRequest(
+                        model: modelID,
+                        maxTokens: 1024,
+                        system: systemInstruction.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : systemInstruction,
+                        messages: payloadMessages
+                    )
+                    request.httpBody = try JSONEncoder().encode(payload)
+
+                    let (data, response) = try await URLSession.shared.data(for: request)
+                    guard let http = response as? HTTPURLResponse else {
+                        throw GeminiError.invalidResponse
+                    }
+
+                    if !(200...299).contains(http.statusCode) {
+                        if let apiError = try? JSONDecoder().decode(AnthropicErrorEnvelope.self, from: data) {
+                            throw GeminiError.api(apiError.error.message)
+                        }
+                        if let raw = String(data: data, encoding: .utf8)?
+                            .trimmingCharacters(in: .whitespacesAndNewlines),
+                           !raw.isEmpty {
+                            throw GeminiError.api(raw)
+                        }
+                        throw GeminiError.api("Anthropic request failed with status \(http.statusCode).")
+                    }
+
+                    let decoded = try JSONDecoder().decode(AnthropicMessagesResponse.self, from: data)
+                    let responseText = decoded.content.compactMap(\.text).joined()
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                    if responseText.isEmpty {
+                        throw GeminiError.emptyReply
+                    }
+
+                    continuation.yield(
+                        ModelReply(
+                            text: responseText,
+                            generatedMedia: [],
+                            inputTokens: decoded.usage?.inputTokens ?? 0,
+                            outputTokens: decoded.usage?.outputTokens ?? 0
+                        )
+                    )
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
         }
+    }
 
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
-        request.setValue(apiVersion, forHTTPHeaderField: "anthropic-version")
-        request.setValue("application/json", forHTTPHeaderField: "content-type")
-        request.timeoutInterval = 120
+    private func normalizedPayloadMessages(
+        from messages: [ChatMessage],
+        latestUserAttachments: [PendingAttachment]
+    ) -> [AnthropicMessage] {
+        var collapsed: [(role: String, text: String)] = []
 
-        var payloadMessages = messages.map { message in
-            AnthropicMessage(
-                role: message.role == .assistant ? "assistant" : "user",
-                content: [.text(message.text)]
-            )
+        for message in messages {
+            let text = message.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !text.isEmpty else { continue }
+
+            let role = message.role == .assistant ? "assistant" : "user"
+            if let last = collapsed.last, last.role == role {
+                collapsed[collapsed.count - 1].text += "\n\n\(text)"
+            } else {
+                collapsed.append((role: role, text: text))
+            }
         }
 
         if !latestUserAttachments.isEmpty {
-            payloadMessages.append(
-                AnthropicMessage(
-                    role: "user",
-                    content: [.text("Note: \(latestUserAttachments.count) attachment(s) were selected but are not yet sent for Anthropic in this app.")]
-                )
-            )
-        }
-
-        let payload = AnthropicMessagesRequest(
-            model: modelID,
-            maxTokens: 1024,
-            system: systemInstruction.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : systemInstruction,
-            messages: payloadMessages
-        )
-        request.httpBody = try JSONEncoder().encode(payload)
-
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse else {
-            throw GeminiError.invalidResponse
-        }
-        if !(200...299).contains(http.statusCode) {
-            if let apiError = try? JSONDecoder().decode(AnthropicErrorEnvelope.self, from: data) {
-                throw GeminiError.api(apiError.error.message)
+            let note = "Note: \(latestUserAttachments.count) attachment(s) were selected but are not yet sent for Anthropic in this app."
+            if let last = collapsed.last, last.role == "user" {
+                collapsed[collapsed.count - 1].text += "\n\n\(note)"
+            } else {
+                collapsed.append((role: "user", text: note))
             }
-            throw GeminiError.api("Request failed with status \(http.statusCode).")
         }
 
-        let decoded = try JSONDecoder().decode(AnthropicMessagesResponse.self, from: data)
-        let text = decoded.content
-            .compactMap { block -> String? in
-                if case .text(let value) = block { return value }
-                return nil
-            }
-            .joined(separator: "\n")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-
-        if text.isEmpty {
-            throw GeminiError.emptyReply
+        return collapsed.map { pair in
+            AnthropicMessage(role: pair.role, content: [.text(pair.text)])
         }
-        return ModelReply(text: text, generatedMedia: [])
     }
 }
 
@@ -155,7 +196,23 @@ private enum AnthropicContentBlock: Codable {
 }
 
 private struct AnthropicMessagesResponse: Decodable {
-    let content: [AnthropicContentBlock]
+    let content: [AnthropicResponseContentBlock]
+    let usage: AnthropicUsage?
+}
+
+private struct AnthropicResponseContentBlock: Decodable {
+    let type: String
+    let text: String?
+}
+
+private struct AnthropicUsage: Decodable {
+    let inputTokens: Int?
+    let outputTokens: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case inputTokens = "input_tokens"
+        case outputTokens = "output_tokens"
+    }
 }
 
 private struct AnthropicErrorEnvelope: Decodable {

@@ -2,12 +2,12 @@ import Foundation
 
 protocol GeminiServicing {
     func listGenerateContentModels() async throws -> [String]
-    func generateReply(
+    func generateReplyStream(
         modelID: String,
         systemInstruction: String,
         messages: [ChatMessage],
         latestUserAttachments: [PendingAttachment]
-    ) async throws -> ModelReply
+    ) -> AsyncThrowingStream<ModelReply, Error>
 }
 
 struct GeminiClient: GeminiServicing {
@@ -66,7 +66,31 @@ struct GeminiClient: GeminiServicing {
         return Array(Set(collected)).sorted()
     }
 
-    func generateReply(
+    func generateReplyStream(
+        modelID: String,
+        systemInstruction: String,
+        messages: [ChatMessage],
+        latestUserAttachments: [PendingAttachment]
+    ) -> AsyncThrowingStream<ModelReply, Error> {
+        AsyncThrowingStream { continuation in
+            Task {
+                do {
+                    let reply = try await generateReply(
+                        modelID: modelID,
+                        systemInstruction: systemInstruction,
+                        messages: messages,
+                        latestUserAttachments: latestUserAttachments
+                    )
+                    continuation.yield(reply)
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+        }
+    }
+
+    private func generateReply(
         modelID: String,
         systemInstruction: String,
         messages: [ChatMessage],
@@ -81,6 +105,7 @@ struct GeminiClient: GeminiServicing {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue(apiKey, forHTTPHeaderField: "x-goog-api-key")
+        request.timeoutInterval = 120
 
         let lastUserIndex = messages.lastIndex { $0.role == .user }
         let payload = GeminiGenerateRequest(
@@ -106,13 +131,13 @@ struct GeminiClient: GeminiServicing {
                 role: "user",
                 parts: [GeminiPart(text: systemInstruction)]
             ),
-            generationConfig: GeminiGenerationConfig(responseModalities: ["TEXT", "IMAGE"])
+            generationConfig: GeminiGenerationConfig(
+                responseModalities: preferredResponseModalities(for: modelID)
+            )
         )
-
         request.httpBody = try JSONEncoder().encode(payload)
-        request.timeoutInterval = 120
 
-        let (data, response) = try await performWithRetry(request: request, maxAttempts: 3)
+        let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse else {
             throw GeminiError.invalidResponse
         }
@@ -120,6 +145,11 @@ struct GeminiClient: GeminiServicing {
         if !(200...299).contains(http.statusCode) {
             if let apiError = try? JSONDecoder().decode(GeminiAPIErrorEnvelope.self, from: data) {
                 throw GeminiError.api(apiError.error.message)
+            }
+            if let raw = String(data: data, encoding: .utf8)?
+                .trimmingCharacters(in: .whitespacesAndNewlines),
+               !raw.isEmpty {
+                throw GeminiError.api(raw)
             }
             throw GeminiError.api("Request failed with status \(http.statusCode).")
         }
@@ -129,8 +159,8 @@ struct GeminiClient: GeminiServicing {
             throw GeminiError.emptyReply
         }
 
-        let text = parts.compactMap(\.text).joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
-        let generatedMedia = parts.compactMap { part -> GeneratedMedia? in
+        let text = parts.compactMap(\.text).joined()
+        let media = parts.compactMap { part -> GeneratedMedia? in
             if let inline = part.inlineData, !inline.data.isEmpty {
                 return GeneratedMedia(
                     kind: mediaKind(for: inline.mimeType),
@@ -150,11 +180,16 @@ struct GeminiClient: GeminiServicing {
             return nil
         }
 
-        if text.isEmpty && generatedMedia.isEmpty {
+        if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && media.isEmpty {
             throw GeminiError.emptyReply
         }
 
-        return ModelReply(text: text, generatedMedia: generatedMedia)
+        return ModelReply(
+            text: text,
+            generatedMedia: media,
+            inputTokens: decoded.usageMetadata?.promptTokenCount ?? 0,
+            outputTokens: decoded.usageMetadata?.candidatesTokenCount ?? 0
+        )
     }
 
     private func performWithRetry(request: URLRequest, maxAttempts: Int) async throws -> (Data, URLResponse) {
@@ -180,6 +215,18 @@ struct GeminiClient: GeminiServicing {
     private func shouldRetry(error: Error) -> Bool {
         guard let urlError = error as? URLError else { return false }
         return transientNetworkErrorCodes.contains(urlError.errorCode)
+    }
+
+    private func preferredResponseModalities(for modelID: String) -> [String] {
+        if supportsImageOutput(modelID: modelID) {
+            return ["TEXT", "IMAGE"]
+        }
+        return ["TEXT"]
+    }
+
+    private func supportsImageOutput(modelID: String) -> Bool {
+        let normalized = modelID.lowercased()
+        return normalized.contains("image") || normalized.contains("nano-banana")
     }
 
     private func mediaKind(for mimeType: String) -> GeneratedMediaKind {
@@ -343,10 +390,16 @@ struct GeminiFileData: Codable {
 
 struct GeminiGenerateResponse: Decodable {
     let candidates: [GeminiCandidate]
+    let usageMetadata: GeminiUsageMetadata?
 }
 
 struct GeminiCandidate: Decodable {
     let content: GeminiContent
+}
+
+struct GeminiUsageMetadata: Decodable {
+    let promptTokenCount: Int?
+    let candidatesTokenCount: Int?
 }
 
 struct GeminiAPIErrorEnvelope: Decodable {

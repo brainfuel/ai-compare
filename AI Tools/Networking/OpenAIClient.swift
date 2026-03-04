@@ -47,21 +47,45 @@ struct OpenAIClient: GeminiServicing {
         return Array(Set(supported)).sorted()
     }
 
-    func generateReply(
+    func generateReplyStream(
         modelID: String,
         systemInstruction: String,
         messages: [ChatMessage],
         latestUserAttachments: [PendingAttachment]
-    ) async throws -> ModelReply {
-        switch modelKind(for: modelID) {
-        case .imageGeneration:
-            return try await generateImageReply(modelID: modelID, messages: messages)
-        case .chatText:
-            break
-        case .unsupported:
-            throw GeminiError.api("Model '\(modelID)' is not supported by this app yet.")
+    ) -> AsyncThrowingStream<ModelReply, Error> {
+        AsyncThrowingStream { continuation in
+            Task {
+                do {
+                    switch modelKind(for: modelID) {
+                    case .imageGeneration:
+                        let reply = try await generateImageReply(modelID: modelID, messages: messages)
+                        continuation.yield(reply)
+                        continuation.finish()
+                    case .chatText:
+                        try await streamChatReply(
+                            modelID: modelID,
+                            systemInstruction: systemInstruction,
+                            messages: messages,
+                            latestUserAttachments: latestUserAttachments,
+                            continuation: continuation
+                        )
+                    case .unsupported:
+                        throw GeminiError.api("Model '\(modelID)' is not supported by this app yet.")
+                    }
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
         }
+    }
 
+    private func streamChatReply(
+        modelID: String,
+        systemInstruction: String,
+        messages: [ChatMessage],
+        latestUserAttachments: [PendingAttachment],
+        continuation: AsyncThrowingStream<ModelReply, Error>.Continuation
+    ) async throws {
         guard let url = URL(string: "https://api.openai.com/v1/chat/completions") else {
             throw GeminiError.invalidRequest
         }
@@ -90,26 +114,53 @@ struct OpenAIClient: GeminiServicing {
             ))
         }
 
-        let payload = OpenAIChatRequest(model: modelID, messages: payloadMessages)
+        let payload = OpenAIChatStreamRequest(model: modelID, messages: payloadMessages)
         request.httpBody = try JSONEncoder().encode(payload)
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (bytes, response) = try await URLSession.shared.bytes(for: request)
         guard let http = response as? HTTPURLResponse else {
             throw GeminiError.invalidResponse
         }
+
         if !(200...299).contains(http.statusCode) {
-            if let apiError = try? JSONDecoder().decode(OpenAIErrorEnvelope.self, from: data) {
+            var errorData = Data()
+            for try await byte in bytes {
+                errorData.append(byte)
+                if errorData.count > 4096 { break }
+            }
+            if let apiError = try? JSONDecoder().decode(OpenAIErrorEnvelope.self, from: errorData) {
                 throw GeminiError.api(apiError.error.message)
             }
             throw GeminiError.api("Request failed with status \(http.statusCode).")
         }
 
-        let decoded = try JSONDecoder().decode(OpenAIChatResponse.self, from: data)
-        let text = decoded.choices.first?.message.content.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        if text.isEmpty {
+        var yieldedAnything = false
+        for try await line in bytes.lines {
+            guard line.hasPrefix("data: ") else { continue }
+            let jsonString = String(line.dropFirst(6))
+            guard jsonString != "[DONE]" else { break }
+            guard let data = jsonString.data(using: .utf8),
+                  let chunk = try? JSONDecoder().decode(OpenAIStreamChunk.self, from: data) else {
+                continue
+            }
+            let content = chunk.choices.first?.delta.content ?? ""
+            let inputTokens = chunk.usage?.promptTokens ?? 0
+            let outputTokens = chunk.usage?.completionTokens ?? 0
+            if !content.isEmpty || inputTokens > 0 || outputTokens > 0 {
+                continuation.yield(ModelReply(
+                    text: content,
+                    generatedMedia: [],
+                    inputTokens: inputTokens,
+                    outputTokens: outputTokens
+                ))
+                if !content.isEmpty { yieldedAnything = true }
+            }
+        }
+
+        if !yieldedAnything {
             throw GeminiError.emptyReply
         }
-        return ModelReply(text: text, generatedMedia: [])
+        continuation.finish()
     }
 
     private func generateImageReply(modelID: String, messages: [ChatMessage]) async throws -> ModelReply {
