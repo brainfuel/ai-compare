@@ -50,10 +50,10 @@ final class PlaygroundViewModel: ObservableObject {
     ) {
         self.serviceFactory = serviceFactory
         self.keychainStore = keychainStore
-        if let conversationStoreURL = Self.makeConversationStoreURL(),
+        if let legacyConversationStoreURL = Self.makeLegacyConversationStoreURL(),
            let mediaStoreDirectoryURL = Self.makeMediaStoreDirectoryURL() {
             self.conversationStore = ConversationStore(
-                storeURL: conversationStoreURL,
+                legacyStoreURL: legacyConversationStoreURL,
                 mediaStoreDirectoryURL: mediaStoreDirectoryURL
             )
         } else {
