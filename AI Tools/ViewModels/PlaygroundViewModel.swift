@@ -219,7 +219,7 @@ final class PlaygroundViewModel: ObservableObject {
             )
             let persistedMedia: [GeneratedMedia]
             if let conversationStore {
-                persistedMedia = await conversationStore.normalizeMedia(reply.generatedMedia)
+                persistedMedia = conversationStore.normalizeMedia(reply.generatedMedia)
             } else {
                 persistedMedia = reply.generatedMedia
             }
@@ -307,7 +307,7 @@ final class PlaygroundViewModel: ObservableObject {
         "api-key.\(provider.rawValue)"
     }
 
-    private static func makeConversationStoreURL() -> URL? {
+    private static func makeLegacyConversationStoreURL() -> URL? {
         do {
             let fileManager = FileManager.default
             let appSupport = try fileManager.url(
@@ -413,7 +413,7 @@ final class PlaygroundViewModel: ObservableObject {
             return
         }
         do {
-            let loaded = try await conversationStore.loadConversations()
+            let loaded = try conversationStore.loadConversations()
             savedConversations = loaded.sorted { $0.updatedAt > $1.updatedAt }
         } catch {
             savedConversations = []
