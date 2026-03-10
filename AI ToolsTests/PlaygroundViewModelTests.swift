@@ -90,18 +90,37 @@ final class PlaygroundViewModelTests: XCTestCase {
         XCTAssertTrue(calls.isEmpty)
     }
 
+    func testSelectingGrokProviderUsesCachedModelsWithoutNetworkFetch() async {
+        let recorder = ModelListRecorder()
+        let modelMap: [AIProvider: [String]] = [
+            .grok: ["grok-3-mini", "grok-3"]
+        ]
+
+        defaults.set(encode(["grok-3-mini", "grok-3"]), forKey: "grok_models_cache_v1")
+
+        let viewModel = makeViewModel(modelMap: modelMap, recorder: recorder)
+        await viewModel.selectProvider(.grok)
+
+        XCTAssertEqual(viewModel.availableModels, ["grok-3-mini", "grok-3"])
+        let calls = await recorder.snapshot()
+        XCTAssertTrue(calls.isEmpty)
+    }
+
     func testLoadOnLaunchPrefetchesForProvidersWithKeysAndOnlyOnce() async {
         let recorder = ModelListRecorder()
         let modelMap: [AIProvider: [String]] = [
             .gemini: ["gemini-2.5-flash", "gemini-2.5-pro"],
             .chatGPT: ["gpt-4.1-mini", "o3-mini"],
-            .anthropic: ["claude-3-5-sonnet-latest"]
+            .anthropic: ["claude-3-5-sonnet-latest"],
+            .grok: ["grok-3-mini", "grok-3"]
         ]
 
         let viewModel = makeViewModel(modelMap: modelMap, recorder: recorder)
         viewModel.updateCurrentAPIKey("gemini-key")
         await viewModel.selectProvider(.chatGPT)
         viewModel.updateCurrentAPIKey("openai-key")
+        await viewModel.selectProvider(.grok)
+        viewModel.updateCurrentAPIKey("grok-key")
         await viewModel.selectProvider(.gemini)
 
         await viewModel.loadOnLaunchIfNeeded()
@@ -109,6 +128,7 @@ final class PlaygroundViewModelTests: XCTestCase {
         var calls = await recorder.snapshot()
         XCTAssertEqual(calls[.gemini], 1)
         XCTAssertEqual(calls[.chatGPT], 1)
+        XCTAssertEqual(calls[.grok], 1)
         XCTAssertNil(calls[.anthropic])
 
         XCTAssertEqual(viewModel.availableModels, ["gemini-2.5-flash", "gemini-2.5-pro"])
@@ -117,6 +137,7 @@ final class PlaygroundViewModelTests: XCTestCase {
         calls = await recorder.snapshot()
         XCTAssertEqual(calls[.gemini], 1)
         XCTAssertEqual(calls[.chatGPT], 1)
+        XCTAssertEqual(calls[.grok], 1)
     }
 
     func testSelectingProviderWithNoCacheDoesNotInjectStaleModelIntoAvailableModels() async {
