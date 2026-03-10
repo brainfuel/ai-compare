@@ -362,6 +362,16 @@ private extension ContentView {
                 Text(provider.displayName)
                     .font(.headline)
                 Spacer()
+                Button {
+                    continueProviderInSingle(provider)
+                } label: {
+                    Image(systemName: "arrowshape.turn.up.right.circle")
+                        .imageScale(.large)
+                }
+                .buttonStyle(.plain)
+                .help("Open \(provider.displayName) compare history in Single mode")
+                .disabled(!compareViewModel.canContinueInSingle(for: provider) || compareViewModel.isSending)
+
                 if compareViewModel.hasAPIKey(for: provider) {
                     Image(systemName: "checkmark.circle.fill")
                         .foregroundStyle(.green)
@@ -631,6 +641,17 @@ private extension ContentView {
                 }
             }
         }
+    }
+
+    func continueProviderInSingle(_ provider: AIProvider) {
+        guard let importedConversation = compareViewModel.makeSingleConversation(for: provider) else {
+            compareViewModel.errorMessage = "No \(provider.displayName) compare history to move yet."
+            return
+        }
+
+        viewModel.importConversation(importedConversation)
+        historySearch = ""
+        workspaceMode = .single
     }
 }
 
