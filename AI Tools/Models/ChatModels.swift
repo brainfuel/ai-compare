@@ -22,12 +22,13 @@ enum AIProvider: String, CaseIterable, Identifiable, Codable {
         case .gemini: return "Gemini API Key"
         case .chatGPT: return "OpenAI API Key"
         case .anthropic: return "Anthropic API Key"
+        case .grok: return "xAI API Key"
         }
     }
 
     var isImplemented: Bool {
         switch self {
-        case .gemini, .chatGPT, .anthropic: return true
+        case .gemini, .chatGPT, .anthropic, .grok: return true
         }
     }
 }
