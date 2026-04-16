@@ -415,21 +415,46 @@ private extension ContentView {
 
             Divider()
 
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 10) {
-                    if compareViewModel.runs.isEmpty {
-                        Text("No compare runs yet.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    } else {
-                        ForEach(compareViewModel.runs) { run in
-                            compareRunCard(run: run, provider: provider)
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 10) {
+                        let displayedRuns = compareViewModel.runsChronological
+                        if displayedRuns.isEmpty {
+                            Text("No compare runs yet.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        } else {
+                            ForEach(displayedRuns) { run in
+                                compareRunCard(run: run, provider: provider)
+                                    .id(run.id)
+                            }
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .textSelection(.enabled)
+                .onChange(of: compareViewModel.runs.count) { _ in
+                    if let lastID = compareViewModel.runsChronological.last?.id {
+                        withAnimation {
+                            proxy.scrollTo(lastID, anchor: .bottom)
                         }
                     }
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .onChange(of: compareViewModel.selectedConversationID) { _ in
+                    if let lastID = compareViewModel.runsChronological.last?.id {
+                        withAnimation {
+                            proxy.scrollTo(lastID, anchor: .bottom)
+                        }
+                    }
+                }
+                .onAppear {
+                    if let lastID = compareViewModel.runsChronological.last?.id {
+                        DispatchQueue.main.async {
+                            proxy.scrollTo(lastID, anchor: .bottom)
+                        }
+                    }
+                }
             }
-            .textSelection(.enabled)
         }
         .padding(10)
         .background(Color.secondary.opacity(0.08))
@@ -894,6 +919,15 @@ private final class CompareViewModel: ObservableObject {
         }
     }
 
+    var runsChronological: [CompareRun] {
+        runs.sorted { lhs, rhs in
+            if lhs.createdAt == rhs.createdAt {
+                return lhs.id.uuidString < rhs.id.uuidString
+            }
+            return lhs.createdAt < rhs.createdAt
+        }
+    }
+
     func loadOnLaunchIfNeeded() async {
         guard !didAutoLoadModels else { return }
         didAutoLoadModels = true
@@ -1116,7 +1150,15 @@ private final class CompareViewModel: ObservableObject {
         var outputTokens = 0
 
         do {
-            let userMessage = ChatMessage(
+            let priorRunsOldestFirst = runs.filter { $0.id != runID }.reversed()
+            var messages: [ChatMessage] = []
+            for priorRun in priorRunsOldestFirst {
+                messages.append(ChatMessage(role: .user, text: priorRun.prompt, attachments: priorRun.attachments))
+                if let result = priorRun.results[provider], result.state == .success, !result.text.isEmpty {
+                    messages.append(ChatMessage(role: .assistant, text: result.text, attachments: []))
+                }
+            }
+            messages.append(ChatMessage(
                 role: .user,
                 text: prompt,
                 attachments: attachments.map {
@@ -1126,12 +1168,12 @@ private final class CompareViewModel: ObservableObject {
                         previewBase64Data: $0.previewJPEGData?.base64EncodedString()
                     )
                 }
-            )
+            ))
 
             let stream = serviceFactory(provider, apiKey).generateReplyStream(
                 modelID: model,
                 systemInstruction: "",
-                messages: [userMessage],
+                messages: messages,
                 latestUserAttachments: attachments
             )
 

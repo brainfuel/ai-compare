@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xcodebuild -scheme \"AI Tools\" -destination \"platform=macOS\" build)"
+    ]
+  }
+}
