@@ -35,6 +35,7 @@ final class PlaygroundViewModel: ObservableObject {
     @Published var availableModels: [String] = []
     @Published var savedConversations: [SavedConversation] = []
     @Published var selectedConversationID: UUID?
+    @Published var pendingAttachments: [PendingAttachment] = []
 
     private let serviceFactory: (AIProvider, String) -> GeminiServicing
     private let keychainStore: KeychainStore
@@ -200,6 +201,26 @@ final class PlaygroundViewModel: ObservableObject {
         }
     }
 
+    func removeAttachment(id: UUID) {
+        pendingAttachments.removeAll { $0.id == id }
+    }
+
+    func addAttachments(fromResult result: Result<[URL], Error>) {
+        switch result {
+        case .failure(let error):
+            errorMessage = "Attachment import failed: \(error.localizedDescription)"
+        case .success(let urls):
+            for url in urls {
+                do {
+                    let attachment = try PendingAttachment.fromFileURL(url)
+                    pendingAttachments.append(attachment)
+                } catch {
+                    errorMessage = "Failed to load \(url.lastPathComponent): \(error.localizedDescription)"
+                }
+            }
+        }
+    }
+
     func refreshModels() async {
         guard canLoadModels else {
             errorMessage = "Model loading is not available for this provider."
@@ -214,8 +235,10 @@ final class PlaygroundViewModel: ObservableObject {
         await fetchModels(for: selectedProvider, reportErrorsForSelectedProvider: true)
     }
 
-    func send(text: String, attachments: [PendingAttachment]) async {
+    func send(text: String) async {
         errorMessage = nil
+        let attachments = pendingAttachments
+        pendingAttachments = []
         guard canSendRequests else {
             errorMessage = "\(selectedProvider.displayName) is not wired yet. Switch to Gemini to send."
             return
