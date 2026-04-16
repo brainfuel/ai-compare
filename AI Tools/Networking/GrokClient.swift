@@ -87,10 +87,23 @@ struct GrokClient: GeminiServicing {
                 if errorData.count > 4096 { break }
             }
 
-            if let apiError = try? JSONDecoder().decode(GrokErrorEnvelope.self, from: errorData) {
-                throw GeminiError.api(apiError.error.message)
+            let hasImageAttachments = latestUserAttachments.contains(where: isSupportedImageAttachment)
+            if http.statusCode == 400, hasImageAttachments {
+                do {
+                    let fallbackReply = try await fetchResponsesFallbackReply(
+                        modelID: modelID,
+                        systemInstruction: systemInstruction,
+                        messages: messages,
+                        latestUserAttachments: latestUserAttachments
+                    )
+                    continuation.yield(fallbackReply)
+                    continuation.finish()
+                    return
+                } catch {
+                    // Keep original chat-completions failure as the surfaced error below.
+                }
             }
-            throw GeminiError.api("Request failed with status \(http.statusCode).")
+            throw makeAPIError(statusCode: http.statusCode, data: errorData, prefix: "Request failed with status")
         }
 
         var yieldedAnything = false
@@ -125,7 +138,7 @@ struct GrokClient: GeminiServicing {
         continuation.finish()
     }
 
-    private func makeChatRequestBody(
+    func makeChatRequestBody(
         modelID: String,
         systemInstruction: String,
         messages: [ChatMessage],
@@ -169,11 +182,12 @@ struct GrokClient: GeminiServicing {
                 parts.append(GrokChatContentPart(text: message.text))
             }
 
-            let imageAttachments = latestUserAttachments.filter {
-                $0.mimeType.hasPrefix("image/") && !$0.base64Data.isEmpty
-            }
+            let imageAttachments = latestUserAttachments.filter(isSupportedImageAttachment)
             parts.append(contentsOf: imageAttachments.map { attachment in
-                GrokChatContentPart(imageDataURL: "data:\(attachment.mimeType);base64,\(attachment.base64Data)")
+                GrokChatContentPart(
+                    imageDataURL: "data:\(attachment.mimeType);base64,\(attachment.base64Data)",
+                    detail: "high"
+                )
             })
 
             let unsupportedCount = latestUserAttachments.count - imageAttachments.count
@@ -194,9 +208,12 @@ struct GrokClient: GeminiServicing {
 
         if lastUserIndex == nil, !latestUserAttachments.isEmpty {
             let parts = latestUserAttachments
-                .filter { $0.mimeType.hasPrefix("image/") && !$0.base64Data.isEmpty }
+                .filter(isSupportedImageAttachment)
                 .map { attachment in
-                    GrokChatContentPart(imageDataURL: "data:\(attachment.mimeType);base64,\(attachment.base64Data)")
+                    GrokChatContentPart(
+                        imageDataURL: "data:\(attachment.mimeType);base64,\(attachment.base64Data)",
+                        detail: "high"
+                    )
                 }
 
             if parts.isEmpty {
