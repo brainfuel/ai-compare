@@ -112,19 +112,39 @@ xcodebuild -project "AI Tools.xcodeproj" -scheme "AI Tools" -destination "platfo
 
 ## Project Structure
 
-- [AI Tools/ContentView.swift](AI%20Tools/ContentView.swift): Main UI layout and interaction
-- [AI Tools/ViewModels/PlaygroundViewModel.swift](AI%20Tools/ViewModels/PlaygroundViewModel.swift): App state, provider switching, send flow, conversation persistence
-- [AI Tools/Models/ChatModels.swift](AI%20Tools/Models/ChatModels.swift): Core models and provider enums
+**Entry point**
+- [AI Tools/AI_ToolsApp.swift](AI%20Tools/AI_ToolsApp.swift): App entry point, `ModelContainer` setup, service and view model wiring
+
+**Views**
+- [AI Tools/ContentView.swift](AI%20Tools/ContentView.swift): Root `NavigationSplitView` shell and workspace mode state
+- [AI Tools/Views/ContentWorkspaceViews.swift](AI%20Tools/Views/ContentWorkspaceViews.swift): Sidebar, composer, attachment strip, and compare workspace views
+- [AI Tools/Views/ChatRenderingViews.swift](AI%20Tools/Views/ChatRenderingViews.swift): Message and media rendering components
+
+**View models**
+- [AI Tools/ViewModels/PlaygroundViewModel.swift](AI%20Tools/ViewModels/PlaygroundViewModel.swift): Single-chat send flow, conversation loading, token tracking
+- [AI Tools/ViewModels/CompareViewModel.swift](AI%20Tools/ViewModels/CompareViewModel.swift): Compare send flow, concurrent provider execution, compare history
+
+**Services**
+- [AI Tools/Services/APIKeyManager.swift](AI%20Tools/Services/APIKeyManager.swift): Keychain read/write with debounced persistence
+- [AI Tools/Services/ModelService.swift](AI%20Tools/Services/ModelService.swift): Model selection and per-provider model list cache
+
+**Storage**
+- [AI Tools/Storage/SwiftDataModels.swift](AI%20Tools/Storage/SwiftDataModels.swift): `@Model` classes (`ConversationRecord`, `MessageRecord`, `CompareConversationRecord`, `CompareRunRecord`)
+- [AI Tools/Storage/ConversationStore.swift](AI%20Tools/Storage/ConversationStore.swift): SwiftData-backed single-chat persistence, media normalization, JSON migration
+- [AI Tools/Storage/CompareConversationStore.swift](AI%20Tools/Storage/CompareConversationStore.swift): SwiftData-backed compare persistence, media normalization, AppStorage migration
+
+**Models**
+- [AI Tools/Models/ChatModels.swift](AI%20Tools/Models/ChatModels.swift): Core data models and provider enums
 - [AI Tools/Models/PendingAttachment.swift](AI%20Tools/Models/PendingAttachment.swift): Attachment loading and image preprocessing
+
+**Networking**
 - [AI Tools/Networking/GeminiClient.swift](AI%20Tools/Networking/GeminiClient.swift): Gemini API integration
 - [AI Tools/Networking/OpenAIClient.swift](AI%20Tools/Networking/OpenAIClient.swift): OpenAI API integration
 - [AI Tools/Networking/AnthropicClient.swift](AI%20Tools/Networking/AnthropicClient.swift): Anthropic API integration
 - [AI Tools/Networking/GrokClient.swift](AI%20Tools/Networking/GrokClient.swift): xAI Grok API integration
-- [AI Tools/Storage/ConversationStore.swift](AI%20Tools/Storage/ConversationStore.swift): SwiftData-backed single-chat persistence and media normalization
-- [AI Tools/Storage/CompareConversationStore.swift](AI%20Tools/Storage/CompareConversationStore.swift): SwiftData-backed compare conversation persistence
-- [AI Tools/Views/ContentWorkspaceViews.swift](AI%20Tools/Views/ContentWorkspaceViews.swift): Extracted sidebar, composer, and compare workspace views
-- [AI Tools/Views/ChatRenderingViews.swift](AI%20Tools/Views/ChatRenderingViews.swift): Message/media rendering components
-- [AI ToolsTests/PlaygroundViewModelTests.swift](AI%20ToolsTests/PlaygroundViewModelTests.swift): Model cache and prefetch unit tests
+
+**Tests**
+- [AI ToolsTests/PlaygroundViewModelTests.swift](AI%20ToolsTests/PlaygroundViewModelTests.swift): Model cache, prefetch, and token aggregation unit tests
 - [AI ToolsTests/ConversationStoreTests.swift](AI%20ToolsTests/ConversationStoreTests.swift): Conversation storage round-trip coverage
 
 ## Known Limitations
