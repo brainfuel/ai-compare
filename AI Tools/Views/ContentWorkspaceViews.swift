@@ -654,10 +654,11 @@ struct CompareProviderColumnView: View {
 #endif
                 }
 #if os(iOS)
+                Spacer()
                 Button(action: onRefreshModels) {
                     Image(systemName: "arrow.clockwise")
-                        .font(.caption)
-                        .imageScale(.small)
+                        .font(.subheadline)
+                        .imageScale(.medium)
                 }
                 .buttonStyle(.borderless)
                 .foregroundStyle(.secondary)
