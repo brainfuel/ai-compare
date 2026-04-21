@@ -4,5 +4,12 @@
 <dict>
 	<key>CFBundleDisplayName</key>
 	<string>AI Compare</string>
+
+	<!-- iPad: landscape only -->
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
 </dict>
 </plist>

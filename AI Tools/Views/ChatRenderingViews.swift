@@ -675,12 +675,25 @@ struct PDFExportButton: View {
     let filename: String
     let buildData: () -> Data
 
+#if os(iOS)
+    @State private var shareURL: URL?
+    @State private var isShowingShare = false
+#endif
+
     var body: some View {
         Button { presentShareSheet() } label: {
             Image(systemName: "square.and.arrow.up")
                 .offset(y: -2)
         }
         .help("Share / Export PDF")
+#if os(iOS)
+        .sheet(isPresented: $isShowingShare) {
+            if let url = shareURL {
+                ActivityView(items: [url])
+                    .ignoresSafeArea()
+            }
+        }
+#endif
     }
 
     private func presentShareSheet() {
@@ -697,9 +710,27 @@ struct PDFExportButton: View {
                                 width: 1, height: 1)
             picker.show(relativeTo: anchor, of: contentView, preferredEdge: .minY)
         }
+#elseif os(iOS)
+        let data = buildData()
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(filename)
+        guard (try? data.write(to: url)) != nil else { return }
+        shareURL = url
+        isShowingShare = true
 #endif
     }
 }
+
+#if os(iOS)
+private struct ActivityView: UIViewControllerRepresentable {
+    let items: [Any]
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: items, applicationActivities: nil)
+    }
+
+    func updateUIViewController(_ uvc: UIActivityViewController, context: Context) {}
+}
+#endif
 
 // MARK: - PDF builder (Core Text, A4, multi-page)
 
