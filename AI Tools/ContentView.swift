@@ -61,6 +61,8 @@ struct ContentView: View {
 #if os(macOS)
         .frame(minWidth: 1180, minHeight: 760)
         .navigationSplitViewColumnWidth(min: 280, ideal: 320)
+#elseif os(iOS)
+        .navigationSplitViewColumnWidth(min: 200, ideal: 220, max: 240)
 #endif
         .task {
             await viewModel.loadOnLaunchIfNeeded()

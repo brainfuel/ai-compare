@@ -191,6 +191,9 @@ struct WorkspaceDetailView: View {
         .frame(minWidth: 760)
 #endif
         .navigationTitle("AI Compare")
+#if os(iOS)
+        .navigationBarTitleDisplayMode(.inline)
+#endif
         .toolbar {
             if workspaceMode == .single {
                 ToolbarItem(placement: .primaryAction) {
@@ -629,9 +632,17 @@ struct CompareProviderColumnView: View {
                     }
                     .pickerStyle(.menu)
                 }
+#if os(iOS)
+                Button(action: onRefreshModels) {
+                    Image(systemName: "arrow.clockwise")
+                }
+                .buttonStyle(.bordered)
+                .disabled(state.isSending || !state.hasAPIKey)
+#else
                 Button("Load", action: onRefreshModels)
                 .buttonStyle(.bordered)
                 .disabled(state.isSending || !state.hasAPIKey)
+#endif
             }
 
             if let message = state.providerStatusMessage, !message.isEmpty {
