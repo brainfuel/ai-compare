@@ -37,11 +37,8 @@ Pods/
 # Carthage
 Carthage/Build/
 
-# Fastlane
-fastlane/report.xml
-fastlane/Preview.html
-fastlane/screenshots/**/*.png
-fastlane/test_output
+# Fastlane — ignore entirely (contains App Store Connect API key)
+fastlane/
 
 # Code Injection
 iOSInjectionProject/
