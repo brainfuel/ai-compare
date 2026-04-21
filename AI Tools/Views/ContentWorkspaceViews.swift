@@ -204,7 +204,6 @@ struct WorkspaceDetailView: View {
             } else {
                 ToolbarItem(placement: .primaryAction) {
                     Button {
-                        compareViewModel.synthesisState = .idle
                         showingSynthesis = true
                     } label: {
                         Label("Synthesise", systemImage: "wand.and.stars")
@@ -1103,6 +1102,14 @@ struct CompareSynthesisView: View {
                 .labelsHidden()
                 .pickerStyle(.menu)
                 .frame(width: 140)
+
+                // Timestamp of last run
+                if let ts = compareViewModel.synthesisTimestamp {
+                    Text("Last run \(ts, style: .relative) ago")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
+
                 Spacer()
                 Button {
                     Task { await compareViewModel.synthesize(using: selectedProvider) }
@@ -1110,7 +1117,11 @@ struct CompareSynthesisView: View {
                     if case .synthesizing = compareViewModel.synthesisState {
                         ProgressView().controlSize(.small)
                     } else {
-                        Label("Run", systemImage: "wand.and.stars")
+                        let hasResult: Bool = {
+                            if case .success = compareViewModel.synthesisState { return true }
+                            return false
+                        }()
+                        Label(hasResult ? "Re-run" : "Run", systemImage: "wand.and.stars")
                     }
                 }
                 .buttonStyle(.borderedProminent)
@@ -1122,6 +1133,21 @@ struct CompareSynthesisView: View {
             .padding(.horizontal)
             .padding(.vertical, 10)
             .background(AppTheme.surfaceSecondary)
+
+            // Stale banner — shown when new runs have been added since synthesis ran
+            if compareViewModel.isSynthesisStale {
+                HStack(spacing: 6) {
+                    Image(systemName: "clock.badge.exclamationmark.fill")
+                        .foregroundStyle(.orange)
+                    Text("New responses have been added since this was run. Tap Re-run to update.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(Color.orange.opacity(0.08))
+            }
 
             Divider()
 

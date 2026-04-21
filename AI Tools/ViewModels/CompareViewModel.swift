@@ -110,6 +110,7 @@ final class CompareViewModel: ObservableObject {
         selectedConversationID = nil
         runs.removeAll()
         errorMessage = nil
+        synthesisState = .idle
     }
 
     func selectConversation(_ id: UUID?) {
@@ -117,10 +118,13 @@ final class CompareViewModel: ObservableObject {
         guard let id, let conversation = savedConversations.first(where: { $0.id == id }) else {
             runs.removeAll()
             errorMessage = nil
+            synthesisState = .idle
             return
         }
         runs = conversation.runs
         errorMessage = nil
+        // Restore cached synthesis result (if any) for this conversation.
+        synthesisState = conversation.cachedSynthesis.map { .success($0.result) } ?? .idle
     }
 
     func deleteSelectedConversation() {
@@ -355,17 +359,49 @@ final class CompareViewModel: ObservableObject {
             let disagreements = (json["disagreements"] as? [[String: Any]] ?? []).compactMap { d -> SynthesisDisagreement? in
                 guard let topic     = d["topic"] as? String,
                       let positions = d["positions"] as? [String: String] else { return nil }
-                let sorted = positions.sorted { $0.key < $1.key }.map { ($0.key, $0.value) }
+                let sorted = positions.sorted { $0.key < $1.key }
+                    .map { SynthesisPosition(model: $0.key, position: $0.value) }
                 return SynthesisDisagreement(topic: topic, positions: sorted)
             }
 
-            synthesisState = .success(SynthesisResult(
+            let synthesisResult = SynthesisResult(
                 consensus: consensus, disagreements: disagreements,
                 unique: unique, suspicious: suspicious
-            ))
+            )
+            synthesisState = .success(synthesisResult)
+            saveSynthesisCache(synthesisResult, provider: provider)
         } catch {
             synthesisState = .failed(error.localizedDescription)
         }
+    }
+
+    // MARK: - Synthesis cache helpers
+
+    /// True when the cached synthesis exists but new runs have been added since it ran.
+    var isSynthesisStale: Bool {
+        guard case .success = synthesisState,
+              let id = selectedConversationID,
+              let cached = savedConversations.first(where: { $0.id == id })?.cachedSynthesis
+        else { return false }
+        return Set(runs.map(\.id)) != cached.runIDs
+    }
+
+    /// The date the cached synthesis was last run for the current conversation.
+    var synthesisTimestamp: Date? {
+        guard let id = selectedConversationID else { return nil }
+        return savedConversations.first(where: { $0.id == id })?.cachedSynthesis?.synthesisedAt
+    }
+
+    private func saveSynthesisCache(_ result: SynthesisResult, provider: AIProvider) {
+        guard let id = selectedConversationID,
+              let index = savedConversations.firstIndex(where: { $0.id == id }) else { return }
+        savedConversations[index].cachedSynthesis = CachedSynthesis(
+            result: result,
+            runIDs: Set(runs.map(\.id)),
+            synthesisedAt: Date(),
+            provider: provider
+        )
+        persistSavedConversations()
     }
 
     // MARK: - Private: model fetching

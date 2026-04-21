@@ -2,32 +2,64 @@ import Foundation
 
 // MARK: - Synthesis models
 
-struct SynthesisItem: Identifiable {
-    let id = UUID()
+struct SynthesisItem: Identifiable, Codable {
+    let id: UUID
     let text: String
+
+    init(text: String) {
+        self.id   = UUID()
+        self.text = text
+    }
 }
 
-struct SynthesisDisagreement: Identifiable {
-    let id = UUID()
+// Named struct replaces the non-Codable tuple (model: String, position: String)
+struct SynthesisPosition: Codable {
+    let model: String
+    let position: String
+}
+
+struct SynthesisDisagreement: Identifiable, Codable {
+    let id: UUID
     let topic: String
-    let positions: [(model: String, position: String)]
+    let positions: [SynthesisPosition]
+
+    init(topic: String, positions: [SynthesisPosition]) {
+        self.id        = UUID()
+        self.topic     = topic
+        self.positions = positions
+    }
 }
 
-struct SynthesisUniquePoint: Identifiable {
-    let id = UUID()
+struct SynthesisUniquePoint: Identifiable, Codable {
+    let id: UUID
     let claim: String
     let source: String
+
+    init(claim: String, source: String) {
+        self.id     = UUID()
+        self.claim  = claim
+        self.source = source
+    }
 }
 
-struct SynthesisResult {
-    let consensus: [SynthesisItem]
+struct SynthesisResult: Codable {
+    let consensus:     [SynthesisItem]
     let disagreements: [SynthesisDisagreement]
-    let unique: [SynthesisUniquePoint]
-    let suspicious: [SynthesisItem]
+    let unique:        [SynthesisUniquePoint]
+    let suspicious:    [SynthesisItem]
 
     var isEmpty: Bool {
         consensus.isEmpty && disagreements.isEmpty && unique.isEmpty && suspicious.isEmpty
     }
+}
+
+// Snapshot of a synthesis result attached to a conversation.
+struct CachedSynthesis: Codable {
+    let result:         SynthesisResult
+    /// IDs of the CompareRuns that were present when this synthesis ran.
+    let runIDs:         Set<UUID>
+    let synthesisedAt:  Date
+    let provider:       AIProvider
 }
 
 enum SynthesisState {
@@ -69,6 +101,7 @@ struct CompareConversation: Identifiable, Codable {
     var title: String
     var updatedAt: Date
     var runs: [CompareRun]
+    var cachedSynthesis: CachedSynthesis?
 
     var searchBlob: String {
         let prompts = runs.map(\.prompt).joined(separator: "\n")
