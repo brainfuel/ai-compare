@@ -253,12 +253,17 @@ final class PlaygroundViewModel: ObservableObject {
                 messages: messages,
                 latestUserAttachments: attachments
             )
+            var lastUIUpdate = Date.distantPast
             for try await chunk in stream {
                 chunks.append(chunk.text)
                 accumulatedMedia += chunk.generatedMedia
                 if chunk.inputTokens > 0 { inputTokens = chunk.inputTokens }
                 if chunk.outputTokens > 0 { outputTokens = chunk.outputTokens }
-                streamingText = chunks.joined()
+                let now = Date()
+                if now.timeIntervalSince(lastUIUpdate) >= 0.05 {
+                    lastUIUpdate = now
+                    streamingText = chunks.joined()
+                }
             }
             let accumulatedText = chunks.joined()
             let persistedMedia = conversationStore?.normalizeMedia(accumulatedMedia) ?? accumulatedMedia
