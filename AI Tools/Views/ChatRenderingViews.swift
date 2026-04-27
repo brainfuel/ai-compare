@@ -1,6 +1,6 @@
 import SwiftUI
-import Textual
 import UniformTypeIdentifiers
+import WebKit
 #if canImport(AVKit)
 import AVKit
 #endif
@@ -8,7 +8,17 @@ import AVKit
 import PDFKit
 #endif
 
-// MARK: - MarkdownText
+// MARK: - MarkdownText (WebKit-backed)
+//
+// Renders model output by converting markdown to HTML and displaying it in
+// a WKWebView. Tables, lists, code blocks and links all get native browser
+// rendering, and selection works the way it does in Safari — drag across
+// blocks, double-click to select word, triple-click to select paragraph,
+// Cmd-A to select the whole message, Cmd-C to copy as rich text or HTML.
+//
+// The web view auto-sizes to its content via a small JS ResizeObserver
+// bridge (see `MarkdownHTML.template`) so it lays out cleanly inside a
+// SwiftUI `VStack` with no internal scrolling.
 
 struct MarkdownText: View {
     let raw: String
@@ -19,11 +29,16 @@ struct MarkdownText: View {
         self.selectable = selectable
     }
 
+    @State private var height: CGFloat = 1
+
     var body: some View {
-        StructuredText(markdown: cappedHeadings)
-            .textual.fontScale(0.82)
-            .conditionalTextSelection(selectable)
-            .frame(maxWidth: .infinity, alignment: .leading)
+        MarkdownWebViewBridge(
+            html: MarkdownHTML.render(cappedHeadings),
+            selectable: selectable,
+            height: $height
+        )
+        .frame(height: max(height, 1))
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     /// Demotes H1 and H2 headings to H3 so models like Claude can't render
@@ -37,6 +52,8 @@ struct MarkdownText: View {
     }
 }
 
+// Used by other views (e.g. ContentWorkspaceViews) to toggle SwiftUI text
+// selection on subtrees that don't use MarkdownText.
 extension View {
     @ViewBuilder
     func conditionalTextSelection(_ enabled: Bool) -> some View {

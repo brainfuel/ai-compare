@@ -27,6 +27,12 @@ final class PlaygroundViewModel: ObservableObject {
     @Published var selectedConversationID: UUID?
     @Published var pendingAttachments: [PendingAttachment] = []
 
+    /// True while `importConversation` is mutating published state. Views can
+    /// check this in their `.onChange` handlers to avoid reacting to programmatic
+    /// changes (e.g. the provider Picker would otherwise overwrite the imported
+    /// modelID with the default model for that provider).
+    private(set) var isImportingConversation = false
+
     private let apiKeyManager: APIKeyManager
     private let modelService: ModelService
     private let serviceFactory: (AIProvider, String) -> GeminiServicing
@@ -161,6 +167,10 @@ final class PlaygroundViewModel: ObservableObject {
         }
 
         savedConversations.sort { $0.updatedAt > $1.updatedAt }
+
+        // Raise the flag so the Picker's `.onChange(of: selectedProvider)`
+        // in ContentWorkspaceViews doesn't overwrite our freshly-set modelID.
+        isImportingConversation = true
         selectedConversationID = imported.id
         selectedProvider = imported.provider
         providerStore = imported.provider.rawValue
@@ -168,6 +178,11 @@ final class PlaygroundViewModel: ObservableObject {
         availableModels = modelService.availableModels(for: imported.provider, including: imported.modelID)
         messages = imported.messages
         errorMessage = nil
+        // Lower the flag on the next runloop tick, after SwiftUI has processed
+        // the onChange callbacks triggered by the mutations above.
+        DispatchQueue.main.async { [weak self] in
+            self?.isImportingConversation = false
+        }
         persistSavedConversations()
     }
 

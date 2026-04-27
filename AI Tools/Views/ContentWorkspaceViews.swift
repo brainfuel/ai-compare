@@ -1148,11 +1148,7 @@ struct MessageBubbleView: View {
 
             if !message.text.isEmpty {
                 Group {
-                    if message.role == .assistant {
-                        MarkdownText(message.text)
-                    } else {
-                        Text(message.text).frame(maxWidth: .infinity, alignment: .leading)
-                    }
+                    MarkdownText(message.text)
                 }
                 .padding(10)
                 .background(message.role == .user ? AppTheme.nodeHuman.opacity(0.2) : AppTheme.surfaceSecondary)
