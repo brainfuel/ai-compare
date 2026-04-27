@@ -750,14 +750,24 @@ struct CompareProviderColumnView: View {
                         Color.clear
                     } else {
                         LazyVStack(alignment: .leading, spacing: 10) {
-                            let displayedRuns = runs
+                            // Hide runs that were never dispatched to this
+                            // provider (e.g. user targeted a single model, or
+                            // this provider is missing its key/model).
+                            let displayedRuns = runs.filter {
+                                $0.results[provider]?.state != .skipped
+                            }
                             if displayedRuns.isEmpty {
                                 Text(compareEmptyStateMessage)
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             } else {
                                 ForEach(displayedRuns) { run in
-                                    CompareRunCardView(run: run, provider: provider, isAnimating: isAnimating).id(run.id)
+                                    CompareRunCardView(
+                                        run: run,
+                                        provider: provider,
+                                        isAnimating: isAnimating,
+                                        onRetry: state.isSending ? nil : { onRetryRun(run.id) }
+                                    ).id(run.id)
                                 }
                             }
                         }
@@ -818,21 +828,18 @@ struct CompareRunCardView: View {
     let run: CompareRun
     let provider: AIProvider
     var isAnimating: Bool = false
+    var onRetry: (() -> Void)? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(run.createdAt, format: .dateTime.hour().minute().second())
                 .font(.caption2).foregroundStyle(.secondary)
 
-            Text(run.prompt)
-                .font(.subheadline)
-                .padding(8)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(AppTheme.nodeInput.opacity(0.2))
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-
-            if !run.attachments.isEmpty {
-                ForEach(run.attachments) { MessageAttachmentView(attachment: $0) }
+            if !isAnimating {
+                InlineConversationView(
+                    messages: synthesizedMessages,
+                    streamingText: streamingTextIfLoading
+                )
             }
 
             if let result = run.results[provider] {
@@ -842,23 +849,8 @@ struct CompareRunCardView: View {
                         ProgressView().controlSize(.small).frame(width: 16, height: 16)
                         Text("Thinking...").foregroundStyle(.secondary)
                     }
-                    if !result.text.isEmpty {
-                        MarkdownText(result.text, selectable: !isAnimating)
-                            .padding(8).background(AppTheme.surfacePrimary).clipShape(RoundedRectangle(cornerRadius: 8))
-                    }
                 case .success:
-                    if !result.text.isEmpty {
-                        MarkdownText(result.text, selectable: !isAnimating)
-                            .padding(8).background(AppTheme.surfacePrimary).clipShape(RoundedRectangle(cornerRadius: 8))
-                    }
-                    if !result.generatedMedia.isEmpty {
-                        ForEach(result.generatedMedia) { media in
-                            AssistantMediaView(media: media).frame(maxWidth: 360).clipShape(RoundedRectangle(cornerRadius: 8))
-                        }
-                    }
-                    if result.inputTokens > 0 || result.outputTokens > 0 {
-                        TokenUsageRow(modelID: result.modelID, inputTokens: result.inputTokens, outputTokens: result.outputTokens)
-                    }
+                    EmptyView()
                 case .failed:
                     if let error = result.errorMessage {
                         Button { copyToClipboard(error) } label: {
@@ -868,6 +860,17 @@ struct CompareRunCardView: View {
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }
                         .buttonStyle(.plain).help("Click to copy error")
+                    }
+                    if let onRetry {
+                        Button {
+                            onRetry()
+                        } label: {
+                            Label("Retry", systemImage: "arrow.clockwise")
+                                .font(.caption)
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        .help("Re-run this provider with the current model")
                     }
                 case .skipped:
                     Text(result.errorMessage ?? "Skipped").font(.caption).foregroundStyle(.secondary)
@@ -879,6 +882,42 @@ struct CompareRunCardView: View {
         .overlay(RoundedRectangle(cornerRadius: 8).stroke(AppTheme.cardBorder, lineWidth: 1))
         .clipShape(RoundedRectangle(cornerRadius: 8))
     }
+
+    private var result: CompareProviderResult? { run.results[provider] }
+
+    /// Build a synthetic [user, assistant] message pair so the inline
+    /// conversation web view can render the prompt + response in one
+    /// surface (matches single-mode rendering and selection).
+    private var synthesizedMessages: [ChatMessage] {
+        var msgs: [ChatMessage] = []
+        msgs.append(ChatMessage(
+            role: .user,
+            text: run.prompt,
+            attachments: run.attachments
+        ))
+        if let r = result {
+            // For .loading we feed live text via streamingText; only include a
+            // finalized assistant message for non-loading states with content.
+            if r.state != .loading {
+                let text = r.text
+                msgs.append(ChatMessage(
+                    role: .assistant,
+                    text: text,
+                    attachments: [],
+                    generatedMedia: r.generatedMedia,
+                    inputTokens: r.inputTokens,
+                    outputTokens: r.outputTokens,
+                    modelID: r.modelID
+                ))
+            }
+        }
+        return msgs
+    }
+
+    private var streamingTextIfLoading: String? {
+        guard let r = result, r.state == .loading else { return nil }
+        return r.text.isEmpty ? nil : r.text
+    }
 }
 
 struct CompareComposerSection: View {
@@ -886,6 +925,7 @@ struct CompareComposerSection: View {
     @State private var prompt = ""
     @State private var isDropTargeted = false
     @State private var showingFileImporter = false
+    @State private var sendTarget: AIProvider? = nil
     @FocusState private var inputFocused: Bool
 #if os(iOS)
     @State private var photoItem: PhotosPickerItem?
@@ -935,6 +975,9 @@ struct CompareComposerSection: View {
                     Text(compareViewModel.composerStatusLabel).font(.footnote).foregroundStyle(.secondary)
                 }
                 Spacer()
+
+                sendTargetMenu
+
                 Button("Attach") { showingFileImporter = true }
                     .buttonStyle(.bordered)
                     .disabled(compareViewModel.isSending)
@@ -948,12 +991,19 @@ struct CompareComposerSection: View {
                     Task { await loadPhoto(item, add: { compareViewModel.addAttachments(fromResult: $0) }) }
                 }
 #endif
-                Button("Send All") { send() }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(
-                        compareViewModel.isSending ||
-                        (prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && compareViewModel.pendingAttachments.isEmpty)
-                    )
+                if compareViewModel.isSending {
+                    Button("Stop") { compareViewModel.cancelSend() }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.red)
+                        .help("Cancel all in-flight requests")
+                } else {
+                    Button(sendButtonLabel) { send() }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(
+                            prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+                            compareViewModel.pendingAttachments.isEmpty
+                        )
+                }
             }
         }
         .padding(8)
@@ -970,7 +1020,69 @@ struct CompareComposerSection: View {
         guard !text.isEmpty || !compareViewModel.pendingAttachments.isEmpty else { return }
         prompt = ""
         inputFocused = false
-        Task { await compareViewModel.sendCompare(text: text) }
+        // If the chosen target is no longer ready (e.g. key removed), fall
+        // back to All so the send still goes somewhere.
+        let target: AIProvider? = {
+            guard let t = sendTarget else { return nil }
+            return compareViewModel.readyProviders.contains(t) ? t : nil
+        }()
+        compareViewModel.startSendCompare(text: text, targetProvider: target)
+    }
+
+    private var sendButtonLabel: String {
+        if let t = sendTarget, compareViewModel.readyProviders.contains(t) {
+            return "Send to \(t.displayName)"
+        }
+        return "Send All"
+    }
+
+    @ViewBuilder
+    private var sendTargetMenu: some View {
+        let ready = compareViewModel.readyProviders
+        Menu {
+            Button {
+                sendTarget = nil
+            } label: {
+                if sendTarget == nil {
+                    Label("All", systemImage: "checkmark")
+                } else {
+                    Text("All")
+                }
+            }
+            if !ready.isEmpty { Divider() }
+            ForEach(ready, id: \.self) { provider in
+                Button {
+                    sendTarget = provider
+                } label: {
+                    if sendTarget == provider {
+                        Label(provider.displayName, systemImage: "checkmark")
+                    } else {
+                        Text(provider.displayName)
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "paperplane")
+                    .font(.caption)
+                Text(sendTarget?.displayName ?? "All")
+                    .font(.body)
+                Image(systemName: "chevron.down")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            .lineLimit(1)
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .help("Choose which model to send to")
+        .disabled(compareViewModel.isSending)
+        .onChange(of: ready) { _, newReady in
+            // If the chosen target is no longer ready, reset to All.
+            if let t = sendTarget, !newReady.contains(t) {
+                sendTarget = nil
+            }
+        }
     }
 }
 
