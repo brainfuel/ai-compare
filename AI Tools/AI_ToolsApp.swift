@@ -11,6 +11,13 @@ struct AI_ToolsApp: App {
     private let compareViewModel: CompareViewModel
 
     init() {
+#if canImport(UIKit)
+        let brandUIColor = UIColor(red: 76.0/255, green: 117.0/255, blue: 161.0/255, alpha: 1)
+        UINavigationBar.appearance().tintColor = brandUIColor
+        UIToolbar.appearance().tintColor = brandUIColor
+        UIView.appearance(whenContainedInInstancesOf: [UINavigationBar.self]).tintColor = brandUIColor
+#endif
+
         let schema = Schema([
             ConversationRecord.self,
             MessageRecord.self,
