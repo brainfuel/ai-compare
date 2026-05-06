@@ -17,8 +17,8 @@
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "659B77B02F5100600095EB2B"
                BuildableName = "AI Compare.app"
-               BlueprintName = "AI Tools"
-               ReferencedContainer = "container:AI Tools.xcodeproj">
+               BlueprintName = "AI Compare"
+               ReferencedContainer = "container:AI Compare.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
          <BuildActionEntry
@@ -30,9 +30,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "A10000082F6000010095EB2B"
-               BuildableName = "AI ToolsTests.xctest"
-               BlueprintName = "AI ToolsTests"
-               ReferencedContainer = "container:AI Tools.xcodeproj">
+               BuildableName = "AI CompareTests.xctest"
+               BlueprintName = "AI CompareTests"
+               ReferencedContainer = "container:AI Compare.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -50,9 +50,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "A10000082F6000010095EB2B"
-               BuildableName = "AI ToolsTests.xctest"
-               BlueprintName = "AI ToolsTests"
-               ReferencedContainer = "container:AI Tools.xcodeproj">
+               BuildableName = "AI CompareTests.xctest"
+               BlueprintName = "AI CompareTests"
+               ReferencedContainer = "container:AI Compare.xcodeproj">
             </BuildableReference>
          </TestableReference>
       </Testables>
@@ -73,8 +73,8 @@
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "659B77B02F5100600095EB2B"
             BuildableName = "AI Compare.app"
-            BlueprintName = "AI Tools"
-            ReferencedContainer = "container:AI Tools.xcodeproj">
+            BlueprintName = "AI Compare"
+            ReferencedContainer = "container:AI Compare.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </LaunchAction>
@@ -90,8 +90,8 @@
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "659B77B02F5100600095EB2B"
             BuildableName = "AI Compare.app"
-            BlueprintName = "AI Tools"
-            ReferencedContainer = "container:AI Tools.xcodeproj">
+            BlueprintName = "AI Compare"
+            ReferencedContainer = "container:AI Compare.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </ProfileAction>

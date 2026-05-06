@@ -22,16 +22,16 @@
 
 /* Begin PBXFileReference section */
 		659B77B12F5100600095EB2B /* AI Compare.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "AI Compare.app"; sourceTree = BUILT_PRODUCTS_DIR; };
-		A10000012F6000010095EB2B /* AI ToolsTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "AI ToolsTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		A10000012F6000010095EB2B /* AI CompareTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "AI CompareTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		659B77BE2F5100620095EB2B /* Exceptions for "AI Tools" folder in "AI Tools" target */ = {
+		659B77BE2F5100620095EB2B /* Exceptions for "AI Tools" folder in "AI Compare" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
 			);
-			target = 659B77B02F5100600095EB2B /* AI Tools */;
+			target = 659B77B02F5100600095EB2B /* AI Compare */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
@@ -39,7 +39,7 @@
 		659B77B32F5100600095EB2B /* AI Tools */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				659B77BE2F5100620095EB2B /* Exceptions for "AI Tools" folder in "AI Tools" target */,
+				659B77BE2F5100620095EB2B /* Exceptions for "AI Tools" folder in "AI Compare" target */,
 			);
 			path = "AI Tools";
 			sourceTree = "<group>";
@@ -83,7 +83,7 @@
 			isa = PBXGroup;
 			children = (
 				659B77B12F5100600095EB2B /* AI Compare.app */,
-				A10000012F6000010095EB2B /* AI ToolsTests.xctest */,
+				A10000012F6000010095EB2B /* AI CompareTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -91,9 +91,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		659B77B02F5100600095EB2B /* AI Tools */ = {
+		659B77B02F5100600095EB2B /* AI Compare */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 659B77BF2F5100620095EB2B /* Build configuration list for PBXNativeTarget "AI Tools" */;
+			buildConfigurationList = 659B77BF2F5100620095EB2B /* Build configuration list for PBXNativeTarget "AI Compare" */;
 			buildPhases = (
 				659B77AD2F5100600095EB2B /* Sources */,
 				659B77AE2F5100600095EB2B /* Frameworks */,
@@ -106,7 +106,7 @@
 			fileSystemSynchronizedGroups = (
 				659B77B32F5100600095EB2B /* AI Tools */,
 			);
-			name = "AI Tools";
+			name = "AI Compare";
 			packageProductDependencies = (
 				65441A872F96AD9D0058C459 /* Textual */,
 			);
@@ -114,9 +114,9 @@
 			productReference = 659B77B12F5100600095EB2B /* AI Compare.app */;
 			productType = "com.apple.product-type.application";
 		};
-		A10000082F6000010095EB2B /* AI ToolsTests */ = {
+		A10000082F6000010095EB2B /* AI CompareTests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = A100000B2F6000010095EB2B /* Build configuration list for PBXNativeTarget "AI ToolsTests" */;
+			buildConfigurationList = A100000B2F6000010095EB2B /* Build configuration list for PBXNativeTarget "AI CompareTests" */;
 			buildPhases = (
 				A10000052F6000010095EB2B /* Sources */,
 				A10000032F6000010095EB2B /* Frameworks */,
@@ -130,11 +130,11 @@
 			fileSystemSynchronizedGroups = (
 				A10000022F6000010095EB2B /* AI ToolsTests */,
 			);
-			name = "AI ToolsTests";
+			name = "AI CompareTests";
 			packageProductDependencies = (
 			);
 			productName = "AI ToolsTests";
-			productReference = A10000012F6000010095EB2B /* AI ToolsTests.xctest */;
+			productReference = A10000012F6000010095EB2B /* AI CompareTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
 /* End PBXNativeTarget section */
@@ -156,7 +156,7 @@
 					};
 				};
 			};
-			buildConfigurationList = 659B77AC2F5100600095EB2B /* Build configuration list for PBXProject "AI Tools" */;
+			buildConfigurationList = 659B77AC2F5100600095EB2B /* Build configuration list for PBXProject "AI Compare" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -173,8 +173,8 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				659B77B02F5100600095EB2B /* AI Tools */,
-				A10000082F6000010095EB2B /* AI ToolsTests */,
+				659B77B02F5100600095EB2B /* AI Compare */,
+				A10000082F6000010095EB2B /* AI CompareTests */,
 			);
 		};
 /* End PBXProject section */
@@ -216,7 +216,7 @@
 /* Begin PBXTargetDependency section */
 		A10000072F6000010095EB2B /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = 659B77B02F5100600095EB2B /* AI Tools */;
+			target = 659B77B02F5100600095EB2B /* AI Compare */;
 			targetProxy = A10000062F6000010095EB2B /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
@@ -491,7 +491,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		659B77AC2F5100600095EB2B /* Build configuration list for PBXProject "AI Tools" */ = {
+		659B77AC2F5100600095EB2B /* Build configuration list for PBXProject "AI Compare" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				659B77C22F5100620095EB2B /* Debug */,
@@ -500,7 +500,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		659B77BF2F5100620095EB2B /* Build configuration list for PBXNativeTarget "AI Tools" */ = {
+		659B77BF2F5100620095EB2B /* Build configuration list for PBXNativeTarget "AI Compare" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				659B77C02F5100620095EB2B /* Debug */,
@@ -509,7 +509,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		A100000B2F6000010095EB2B /* Build configuration list for PBXNativeTarget "AI ToolsTests" */ = {
+		A100000B2F6000010095EB2B /* Build configuration list for PBXNativeTarget "AI CompareTests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				A10000092F6000010095EB2B /* Debug */,
