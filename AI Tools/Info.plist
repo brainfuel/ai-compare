@@ -5,6 +5,9 @@
 	<key>CFBundleDisplayName</key>
 	<string>AI Compare</string>
 
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.productivity</string>
+
 	<!-- Disables iPad multitasking (Split View / Slide Over).
 	     Without this, Apple requires all 4 orientations. -->
 	<key>UIRequiresFullScreen</key>

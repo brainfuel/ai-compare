@@ -5,17 +5,17 @@ enum AppTheme {
     static let brandTint = Color(red: 76.0 / 255.0, green: 117.0 / 255.0, blue: 161.0 / 255.0)
 
     // Canvas
-    static let canvasBackground = Color(red: 0.96, green: 0.965, blue: 0.97)
+    static let canvasBackground = Color(white: 0.955)
 
     // Surfaces
 #if os(macOS)
     static let surfacePrimary = Color(nsColor: .textBackgroundColor)
-    static let surfaceSecondary = Color(red: 0.955, green: 0.96, blue: 0.968)
-    static let surfaceGrouped = Color(red: 0.945, green: 0.952, blue: 0.963)
+    static let surfaceSecondary = Color(white: 0.945)
+    static let surfaceGrouped = Color(white: 0.933)
 #else
-    static let surfacePrimary = Color(uiColor: .systemBackground)
-    static let surfaceSecondary = Color(uiColor: .secondarySystemBackground)
-    static let surfaceGrouped = Color(uiColor: .systemGroupedBackground)
+    static let surfacePrimary = Color(white: 0.99)
+    static let surfaceSecondary = Color(white: 0.945)
+    static let surfaceGrouped = Color(white: 0.933)
 #endif
 
     // Node card accents

@@ -63,23 +63,23 @@ struct ConversationSidebarView: View {
             TextField(workspaceMode == .single ? "Search History" : "Search Compares", text: $historySearch)
                 .textFieldStyle(.roundedBorder)
 
+            if workspaceMode == .single && viewModel.selectedConversationID == nil {
+                newChatButton(title: "New Chat", icon: "plus.bubble", action: { viewModel.startNewChat() })
+            } else if workspaceMode == .compare && compareViewModel.selectedConversationID == nil {
+                newChatButton(title: "New Compare", icon: "rectangle.3.group.bubble.left", action: { compareViewModel.startNewThread() })
+            }
+
             List {
                 if workspaceMode == .single {
                     conversationList(
                         conversations: viewModel.filteredConversations(query: historySearch),
                         selectedConversationID: viewModel.selectedConversationID,
-                        newRowTitle: "New Chat",
-                        newRowIcon: "plus.bubble",
-                        newRowAction: { viewModel.startNewChat() },
                         selectAction: { viewModel.selectConversation($0) }
                     )
                 } else {
                     conversationList(
                         conversations: compareViewModel.filteredConversations(query: historySearch),
                         selectedConversationID: compareViewModel.selectedConversationID,
-                        newRowTitle: "New Compare",
-                        newRowIcon: "rectangle.3.group.bubble.left",
-                        newRowAction: { compareViewModel.startNewThread() },
                         selectAction: { compareViewModel.selectConversation($0) }
                     )
                 }
@@ -104,38 +104,32 @@ struct ConversationSidebarView: View {
     }
 
     @ViewBuilder
+    private func newChatButton(title: String, icon: String, action: @escaping () -> Void) -> some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.2)) { action() }
+        } label: {
+            HStack {
+                Image(systemName: icon)
+                Text(title).lineLimit(1)
+                Spacer(minLength: 0)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(AppTheme.brandTint.opacity(0.14), in: RoundedRectangle(cornerRadius: 8))
+        .transition(.opacity.combined(with: .move(edge: .top)).combined(with: .scale(scale: 0.98, anchor: .top)))
+    }
+
+    @ViewBuilder
     private func conversationList<Conversation: SidebarConversationSummarizing>(
         conversations: [Conversation],
         selectedConversationID: UUID?,
-        newRowTitle: String,
-        newRowIcon: String,
-        newRowAction: @escaping () -> Void,
         selectAction: @escaping (UUID) -> Void
     ) -> some View {
-        if selectedConversationID == nil {
-            Button {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    newRowAction()
-                }
-            } label: {
-                HStack {
-                    Image(systemName: newRowIcon)
-                    Text(newRowTitle)
-                        .lineLimit(1)
-                    Spacer(minLength: 0)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .listRowInsets(EdgeInsets())
-            .listRowBackground(AppTheme.brandTint.opacity(0.14))
-            .transition(.opacity.combined(with: .move(edge: .top)).combined(with: .scale(scale: 0.98, anchor: .top)))
-        }
-
         ForEach(conversations) { conversation in
             Button {
                 withAnimation(.easeInOut(duration: 0.2)) {
@@ -188,7 +182,7 @@ struct WorkspaceDetailView: View {
                 )
             }
         }
-        .padding()
+        .padding([.horizontal, .top])
         .background(AppTheme.canvasBackground)
 #if os(macOS)
         .frame(minWidth: 760)
