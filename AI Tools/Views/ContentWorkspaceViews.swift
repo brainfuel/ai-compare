@@ -331,11 +331,14 @@ struct SingleConfigurationSection: View {
                 }
 
                 HStack {
-                    if isKeyHidden {
-                        SecureField(viewModel.providerAPIKeyPlaceholder, text: apiKeyBinding)
-                    } else {
-                        TextField(viewModel.providerAPIKeyPlaceholder, text: apiKeyBinding)
+                    Group {
+                        if isKeyHidden {
+                            SecureField(viewModel.providerAPIKeyPlaceholder, text: apiKeyBinding)
+                        } else {
+                            TextField(viewModel.providerAPIKeyPlaceholder, text: apiKeyBinding)
+                        }
                     }
+                    .textFieldStyle(.roundedBorder)
                     Button(isKeyHidden ? "Show" : "Hide") {
                         isKeyHidden.toggle()
                     }
@@ -368,6 +371,11 @@ struct SingleConfigurationSection: View {
 
                 TextField("System Instructions (optional)", text: $viewModel.systemInstruction, axis: .vertical)
                     .lineLimit(2...5)
+                    .textFieldStyle(.plain)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 7)
+                    .background(AppTheme.surfacePrimary, in: RoundedRectangle(cornerRadius: 6))
+                    .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(AppTheme.cardBorder, lineWidth: 0.5))
         }
     }
 
