@@ -154,6 +154,17 @@ private final class ScrollPassthroughWebView: WKWebView {
     override func scrollWheel(with event: NSEvent) {
         nextResponder?.scrollWheel(with: event)
     }
+
+    // WKWebView adds its internal WKScrollView (NSScrollView subclass) lazily,
+    // after viewDidMoveToWindow fires. didAddSubview is the reliable hook.
+    override func didAddSubview(_ subview: NSView) {
+        super.didAddSubview(subview)
+        if let sv = subview as? NSScrollView {
+            sv.hasVerticalScroller = false
+            sv.hasHorizontalScroller = false
+            sv.autohidesScrollers = false
+        }
+    }
 }
 #endif
 

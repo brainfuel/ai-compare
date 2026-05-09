@@ -746,6 +746,7 @@ struct CompareProviderColumnView: View {
 
             ScrollViewReader { proxy in
                 ScrollView {
+                    Color.clear.frame(height: 0).id("column-top")
                     if isAnimating {
                         // Hide markdown content during resize animation so Textual
                         // doesn't recalculate layout on every frame.
@@ -776,7 +777,16 @@ struct CompareProviderColumnView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
+                // Hiding indicators prevents the macOS scrollbar from taking
+                // layout space during streaming, which would change the column
+                // width, trigger WKWebView reflow, and cause jitter.
+                .scrollIndicators(.hidden)
                 .conditionalTextSelection(!isAnimating)
+                .onChange(of: runs.count) { _, count in
+                    if count == 0 {
+                        proxy.scrollTo("column-top", anchor: .top)
+                    }
+                }
                 .onChange(of: latestRunID) { _, newValue in
                     guard let newValue else { return }
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.02) {
