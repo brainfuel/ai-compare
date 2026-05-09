@@ -119,6 +119,7 @@ struct CompareConversation: Identifiable, Codable {
     var updatedAt: Date
     var runs: [CompareRun]
     var cachedSynthesis: CachedSynthesis?
+    var cachedCustomResults: [CachedCustomSynthesis]?
 
     var searchBlob: String {
         let prompts = runs.map(\.prompt).joined(separator: "\n")

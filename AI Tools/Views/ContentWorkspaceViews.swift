@@ -1510,19 +1510,16 @@ private struct DefaultSynthesisCellView: View {
                 .buttonStyle(.borderedProminent)
                 .disabled({
                     if case .synthesizing = compareViewModel.synthesisState { return true }
-                    return !compareViewModel.hasAPIKey(for: selectedProvider)
+                    return !compareViewModel.hasAPIKey(for: provider)
                 }())
             }
-            .padding(.horizontal)
-            .padding(.vertical, 10)
-            .background(AppTheme.surfaceSecondary)
+            .padding(14)
 
-            // Stale banner — shown when new runs have been added since synthesis ran
             if compareViewModel.isSynthesisStale {
+                Divider()
                 HStack(spacing: 6) {
-                    Image(systemName: "clock.badge.exclamationmark.fill")
-                        .foregroundStyle(.orange)
-                    Text("New responses have been added since this was run. Tap Re-run to update.")
+                    Image(systemName: "clock.badge.exclamationmark.fill").foregroundStyle(.orange)
+                    Text("New responses added since last run — tap Re-run to update.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     Spacer()
@@ -1584,8 +1581,7 @@ private struct DefaultSynthesisCellView: View {
                                                         .foregroundStyle(AppTheme.brandTint)
                                                         .frame(width: 90, alignment: .leading)
                                                     Text(pos.position)
-                                                        .font(.caption)
-                                                        .foregroundStyle(.secondary)
+                                                        .font(.caption).foregroundStyle(.secondary)
                                                         .frame(maxWidth: .infinity, alignment: .leading)
                                                 }
                                             }
@@ -1597,20 +1593,15 @@ private struct DefaultSynthesisCellView: View {
                                 }
                             }
                             if !result.unique.isEmpty {
-                                SynthesisSectionView(
-                                    title: "Unique Points",
-                                    subtitle: "Only one model mentioned this",
-                                    icon: "sparkle",
-                                    iconColor: AppTheme.brandTint
-                                ) {
+                                SynthesisSectionView(title: "Unique Points", subtitle: "Only one model mentioned this",
+                                                     icon: "sparkle", iconColor: AppTheme.brandTint) {
                                     ForEach(result.unique) { u in
                                         HStack(alignment: .top, spacing: 8) {
                                             Text(u.source)
                                                 .font(.caption.weight(.semibold))
                                                 .foregroundStyle(AppTheme.brandTint)
                                                 .frame(width: 90, alignment: .leading)
-                                            Text(u.claim)
-                                                .font(.subheadline)
+                                            Text(u.claim).font(.subheadline)
                                                 .frame(maxWidth: .infinity, alignment: .leading)
                                         }
                                         .padding(10)
@@ -1620,29 +1611,119 @@ private struct DefaultSynthesisCellView: View {
                                 }
                             }
                             if !result.suspicious.isEmpty {
-                                SynthesisSectionView(
-                                    title: "Suspicious Claims",
-                                    subtitle: "Potentially questionable or unverifiable",
-                                    icon: "questionmark.diamond.fill",
-                                    iconColor: .red
-                                ) {
-                                    ForEach(result.suspicious) { item in
-                                        SynthesisRowView(text: item.text)
-                                    }
+                                SynthesisSectionView(title: "Suspicious Claims", subtitle: "Potentially questionable or unverifiable",
+                                                     icon: "questionmark.diamond.fill", iconColor: .red) {
+                                    ForEach(result.suspicious) { item in SynthesisRowView(text: item.text) }
                                 }
                             }
                         }
                     }
-                    .padding()
+                    .padding(14)
                     .textSelection(.enabled)
                 }
             }
         }
-        .frame(minWidth: 600, minHeight: 500)
-        .background(AppTheme.canvasBackground)
-        .onAppear {
-            if let first = AIProvider.allCases.first(where: { compareViewModel.hasAPIKey(for: $0) }) {
-                selectedProvider = first
+        .background(AppTheme.surfacePrimary)
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(AppTheme.cardBorder, lineWidth: 1))
+    }
+}
+
+// MARK: - Custom analysis card
+
+private struct CustomSynthesisCellView: View {
+    @Binding var prompt: CustomSynthesisPrompt
+    let state: CustomSynthesisJobState
+    let onRun: (_ promptText: String) -> Void
+    let onDelete: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Card header
+            HStack(spacing: 10) {
+                Image(systemName: "text.bubble")
+                    .foregroundStyle(.secondary)
+                    .imageScale(.medium)
+                TextField("Analysis title", text: $prompt.title)
+                    .font(.headline)
+                    .textFieldStyle(.plain)
+                Spacer()
+                Button(action: onDelete) {
+                    Image(systemName: "trash")
+                        .imageScale(.small)
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Delete this analysis")
+
+                Button {
+                    onRun(prompt.promptText)
+                } label: {
+                    if state == .running {
+                        ProgressView().controlSize(.small).frame(width: 60)
+                    } else {
+                        let hasResult: Bool = {
+                            if case .success = state { return true }
+                            return false
+                        }()
+                        Label(hasResult ? "Re-run" : "Run", systemImage: "wand.and.stars")
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(
+                    state == .running ||
+                    prompt.promptText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                )
+            }
+            .padding(14)
+
+            Divider()
+
+            // Prompt editor
+            ZStack(alignment: .topLeading) {
+                TextEditor(text: $prompt.promptText)
+                    .font(.callout)
+                    .frame(minHeight: 72, maxHeight: 120)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .scrollContentBackground(.hidden)
+                if prompt.promptText.isEmpty {
+                    Text("Enter your analysis prompt — e.g. \"Which model gave the most practical advice?\"")
+                        .font(.callout)
+                        .foregroundStyle(.tertiary)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                        .allowsHitTesting(false)
+                }
+            }
+
+            // Result area (only when there is one)
+            if state != .idle {
+                Divider()
+                resultView.padding(14)
+            }
+        }
+        .background(AppTheme.surfacePrimary)
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(AppTheme.cardBorder, lineWidth: 1))
+    }
+
+    @ViewBuilder
+    private var resultView: some View {
+        switch state {
+        case .idle:
+            EmptyView()
+        case .running:
+            HStack(spacing: 8) {
+                ProgressView().controlSize(.small)
+                Text("Running…").font(.subheadline).foregroundStyle(.secondary)
+            }
+        case .success(let text):
+            MarkdownText(text).textSelection(.enabled)
+        case .failed(let message):
+            HStack(spacing: 6) {
+                Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+                Text(message).font(.caption).foregroundStyle(.secondary)
             }
         }
     }
