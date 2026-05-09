@@ -206,10 +206,11 @@ struct WorkspaceDetailView: View {
                     Button {
                         showingSynthesis = true
                     } label: {
-                        Label("Synthesise", systemImage: "wand.and.stars")
+                        Label("Analyse", systemImage: "wand.and.stars")
+                            .labelStyle(.titleAndIcon)
                     }
-                    .help("Synthesise all responses")
-                    .disabled(compareViewModel.runs.isEmpty || compareViewModel.isSending)
+                    .help("Analyse all responses")
+                    .disabled(!compareViewModel.hasAnalysableResponse || compareViewModel.isSending)
                 }
             }
         }
@@ -1342,9 +1343,9 @@ struct CompareSynthesisView: View {
 
             Divider()
 
-            // Provider picker + run button
+            // Shared provider picker
             HStack(spacing: 12) {
-                Text("Synthesise using")
+                Text("Analyse using")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                 Picker("Provider", selection: $selectedProvider) {
@@ -1355,20 +1356,146 @@ struct CompareSynthesisView: View {
                 .labelsHidden()
                 .pickerStyle(.menu)
                 .frame(width: 140)
-
-                // Timestamp of last run
-                if let ts = compareViewModel.synthesisTimestamp {
-                    Text("Last run \(ts, style: .relative) ago")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                }
-
                 Spacer()
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 10)
+            .background(AppTheme.surfaceSecondary)
+
+            Divider()
+
+            // Card list
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    DefaultSynthesisCellView(
+                        compareViewModel: compareViewModel,
+                        provider: selectedProvider
+                    )
+
+                    ForEach($customPrompts) { $prompt in
+                        CustomSynthesisCellView(
+                            prompt: $prompt,
+                            state: customStates[prompt.id] ?? .idle,
+                            onRun: { promptText in runCustom(id: prompt.id, promptText: promptText) },
+                            onDelete: { removeCustomPrompt(id: prompt.id) }
+                        )
+                    }
+
+                    Button { addCustomPrompt() } label: {
+                        Label("Add Analysis", systemImage: "plus.circle.fill")
+                            .font(.subheadline.weight(.medium))
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(AppTheme.brandTint)
+                    .padding(.vertical, 4)
+                }
+                .padding()
+            }
+        }
+        .frame(minWidth: 640, minHeight: 540)
+        .background(AppTheme.canvasBackground)
+        .onAppear {
+            if let first = AIProvider.allCases.first(where: { compareViewModel.hasAPIKey(for: $0) }) {
+                selectedProvider = first
+            }
+            loadCustomPrompts()
+            hydrateCachedResults()
+        }
+        .onChange(of: customPrompts) { _, _ in saveCustomPrompts() }
+    }
+
+    private func addCustomPrompt() {
+        customPrompts.append(CustomSynthesisPrompt(title: "Custom Analysis", promptText: ""))
+    }
+
+    private func removeCustomPrompt(id: UUID) {
+        customPrompts.removeAll { $0.id == id }
+        customStates.removeValue(forKey: id)
+    }
+
+    private func runCustom(id: UUID, promptText: String) {
+        guard !promptText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        customStates[id] = .running
+        let provider = selectedProvider
+        Task {
+            do {
+                let result = try await compareViewModel.runCustomSynthesis(
+                    promptText: promptText, using: provider
+                )
+                customStates[id] = .success(result)
+                compareViewModel.saveCustomSynthesisCache(
+                    promptID: id, resultText: result, provider: provider
+                )
+            } catch {
+                customStates[id] = .failed(error.localizedDescription)
+            }
+        }
+    }
+
+    /// Restores `.success` states from the current conversation's cache so
+    /// reopening the sheet (or switching to a conversation that already has
+    /// runs) shows the previously generated text without re-running.
+    private func hydrateCachedResults() {
+        for prompt in customPrompts {
+            if let cached = compareViewModel.cachedCustomResult(promptID: prompt.id) {
+                customStates[prompt.id] = .success(cached.resultText)
+            }
+        }
+    }
+
+    private func loadCustomPrompts() {
+        guard let data = UserDefaults.standard.data(forKey: customPromptsKey),
+              let prompts = try? JSONDecoder().decode([CustomSynthesisPrompt].self, from: data)
+        else { return }
+        customPrompts = prompts
+    }
+
+    private func saveCustomPrompts() {
+        if let data = try? JSONEncoder().encode(customPrompts) {
+            UserDefaults.standard.set(data, forKey: customPromptsKey)
+        }
+    }
+}
+
+// MARK: - Default synthesis card
+
+private struct DefaultSynthesisCellView: View {
+    @ObservedObject var compareViewModel: CompareViewModel
+    let provider: AIProvider
+
+    private var isIdle: Bool {
+        if case .idle = compareViewModel.synthesisState { return true }
+        return false
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Card header
+            HStack(spacing: 10) {
+                Image(systemName: "wand.and.stars")
+                    .foregroundStyle(AppTheme.brandTint)
+                    .imageScale(.medium)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Synthesise & Compare")
+                        .font(.headline)
+                    Text("Identifies consensus, disagreements, unique claims, and suspicious assertions.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                if case .success(let result) = compareViewModel.synthesisState {
+                    PDFExportButton(filename: "synthesis.pdf") {
+                        PDFBuilder.synthesisResult(result)
+                    }
+                    .buttonStyle(.plain)
+                    .font(.title3)
+                    .foregroundStyle(AppTheme.brandTint)
+                }
                 Button {
-                    Task { await compareViewModel.synthesize(using: selectedProvider) }
+                    Task { await compareViewModel.synthesize(using: provider) }
                 } label: {
                     if case .synthesizing = compareViewModel.synthesisState {
-                        ProgressView().controlSize(.small)
+                        ProgressView().controlSize(.small).frame(width: 60)
                     } else {
                         let hasResult: Bool = {
                             if case .success = compareViewModel.synthesisState { return true }
@@ -1402,76 +1529,51 @@ struct CompareSynthesisView: View {
                 .background(Color.orange.opacity(0.08))
             }
 
-            Divider()
-
-            // Result area
-            ScrollView {
+            // Result area (hidden in idle to keep the card compact)
+            if !isIdle {
+                Divider()
+            }
+            Group {
                 switch compareViewModel.synthesisState {
                 case .idle:
-                    VStack(spacing: 8) {
-                        Image(systemName: "wand.and.stars")
-                            .font(.system(size: 36))
-                            .foregroundStyle(.secondary)
-                        Text("Pick a model and tap Run to synthesise all responses in this thread.")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(48)
+                    EmptyView()
 
                 case .synthesizing:
-                    VStack(spacing: 12) {
-                        ProgressView()
-                        Text("Synthesising…")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                    HStack(spacing: 8) {
+                        ProgressView().controlSize(.small)
+                        Text("Synthesising…").font(.subheadline).foregroundStyle(.secondary)
                     }
-                    .frame(maxWidth: .infinity)
-                    .padding(48)
+                    .padding(14)
 
                 case .failed(let message):
-                    VStack(spacing: 8) {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .font(.system(size: 28))
-                            .foregroundStyle(.orange)
-                        Text(message)
-                            .font(.subheadline)
-                            .multilineTextAlignment(.center)
+                    HStack(spacing: 8) {
+                        Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+                        Text(message).font(.subheadline)
                     }
-                    .frame(maxWidth: .infinity)
-                    .padding(48)
+                    .padding(14)
 
                 case .success(let result):
-                    VStack(alignment: .leading, spacing: 20) {
+                    VStack(alignment: .leading, spacing: 16) {
                         if result.isEmpty {
-                            Text("The model returned no structured output. Try again or use a different provider.")
+                            Text("No structured output returned — try again or use a different provider.")
                                 .foregroundStyle(.secondary)
-                                .padding()
                         } else {
+                            if let ts = compareViewModel.synthesisTimestamp {
+                                Text("Last run \(ts, style: .relative) ago")
+                                    .font(.caption2).foregroundStyle(.tertiary)
+                            }
                             if !result.consensus.isEmpty {
-                                SynthesisSectionView(
-                                    title: "Consensus",
-                                    subtitle: "All or most models agree",
-                                    icon: "checkmark.seal.fill",
-                                    iconColor: .green
-                                ) {
-                                    ForEach(result.consensus) { item in
-                                        SynthesisRowView(text: item.text)
-                                    }
+                                SynthesisSectionView(title: "Consensus", subtitle: "All or most models agree",
+                                                     icon: "checkmark.seal.fill", iconColor: .green) {
+                                    ForEach(result.consensus) { item in SynthesisRowView(text: item.text) }
                                 }
                             }
                             if !result.disagreements.isEmpty {
-                                SynthesisSectionView(
-                                    title: "Disagreements",
-                                    subtitle: "Direct contradictions between models",
-                                    icon: "arrow.triangle.2.circlepath",
-                                    iconColor: .orange
-                                ) {
+                                SynthesisSectionView(title: "Disagreements", subtitle: "Direct contradictions between models",
+                                                     icon: "arrow.triangle.2.circlepath", iconColor: .orange) {
                                     ForEach(result.disagreements) { d in
                                         VStack(alignment: .leading, spacing: 6) {
-                                            Text(d.topic)
-                                                .font(.subheadline.weight(.medium))
+                                            Text(d.topic).font(.subheadline.weight(.medium))
                                             ForEach(d.positions, id: \.model) { pos in
                                                 HStack(alignment: .top, spacing: 8) {
                                                     Text(pos.model)
