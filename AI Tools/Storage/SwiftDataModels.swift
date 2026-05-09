@@ -104,7 +104,17 @@ final class CompareConversationRecord {
         let r = runs
             .sorted { $0.createdAt < $1.createdAt }
             .compactMap { $0.toStruct(decoder: decoder) }
-        return CompareConversation(id: id, title: title, updatedAt: updatedAt, runs: r)
+        let cachedSynthesis = cachedSynthesisData.flatMap {
+            try? decoder.decode(CachedSynthesis.self, from: $0)
+        }
+        let cachedCustomResults = cachedCustomResultsData.flatMap {
+            try? decoder.decode([CachedCustomSynthesis].self, from: $0)
+        }
+        return CompareConversation(
+            id: id, title: title, updatedAt: updatedAt, runs: r,
+            cachedSynthesis: cachedSynthesis,
+            cachedCustomResults: cachedCustomResults
+        )
     }
 }
 

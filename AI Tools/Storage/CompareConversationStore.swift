@@ -57,6 +57,8 @@ final class CompareConversationStore {
             id: conversation.id, title: conversation.title, updatedAt: conversation.updatedAt
         )
         record.runs = conversation.runs.map { makeRunRecord(from: $0) }
+        record.cachedSynthesisData = conversation.cachedSynthesis.flatMap { try? encoder.encode($0) }
+        record.cachedCustomResultsData = conversation.cachedCustomResults.flatMap { try? encoder.encode($0) }
         return record
     }
 
@@ -73,6 +75,8 @@ final class CompareConversationStore {
     private func upsertRecord(_ record: CompareConversationRecord, from conversation: CompareConversation) {
         record.title     = conversation.title
         record.updatedAt = conversation.updatedAt
+        record.cachedSynthesisData = conversation.cachedSynthesis.flatMap { try? encoder.encode($0) }
+        record.cachedCustomResultsData = conversation.cachedCustomResults.flatMap { try? encoder.encode($0) }
 
         let existingByID = Dictionary(uniqueKeysWithValues: record.runs.map { ($0.id, $0) })
         let newIDs       = Set(conversation.runs.map(\.id))
