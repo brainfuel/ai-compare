@@ -93,6 +93,10 @@ final class CompareConversationRecord {
     var updatedAt: Date
     @Relationship(deleteRule: .cascade, inverse: \CompareRunRecord.conversation)
     var runs: [CompareRunRecord] = []
+    /// JSON-encoded CachedSynthesis (default structured analysis result).
+    var cachedSynthesisData: Data?
+    /// JSON-encoded [CachedCustomSynthesis] (per-custom-prompt results).
+    var cachedCustomResultsData: Data?
 
     init(id: UUID, title: String, updatedAt: Date) {
         self.id = id

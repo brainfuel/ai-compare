@@ -83,6 +83,17 @@ final class CompareViewModel: ObservableObject {
 
     var runsChronological: [CompareRun] { runs }
 
+    /// True when at least one provider in any run has produced non-empty
+    /// text. The Analyse sheet has nothing to work with otherwise.
+    var hasAnalysableResponse: Bool {
+        runs.contains { run in
+            run.results.values.contains { result in
+                result.state == .success &&
+                !result.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            }
+        }
+    }
+
     func loadOnLaunchIfNeeded() async {
         guard !didAutoLoadModels else { return }
         didAutoLoadModels = true
@@ -331,37 +342,13 @@ final class CompareViewModel: ObservableObject {
             synthesisState = .failed("\(provider.displayName) is not configured.")
             return
         }
-
-        let sortedRuns = runsChronological
-        guard !sortedRuns.isEmpty else {
-            synthesisState = .failed("No runs to synthesise.")
-            return
-        }
-
-        // Gather successful responses grouped by provider
-        var responseBlocks: [String] = []
-        for p in AIProvider.allCases {
-            var parts: [String] = []
-            for run in sortedRuns {
-                guard let result = run.results[p],
-                      result.state == .success,
-                      !result.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                else { continue }
-                parts.append("Q: \(run.prompt)\nA: \(result.text)")
-            }
-            guard !parts.isEmpty else { continue }
-            let label = p.displayName
-            responseBlocks.append("=== \(label) ===\n\(parts.joined(separator: "\n\n"))")
-        }
-
-        guard !responseBlocks.isEmpty else {
+        guard let body = buildResponseBody() else {
             synthesisState = .failed("No successful responses found to synthesise.")
             return
         }
 
         synthesisState = .synthesizing
 
-        let body = responseBlocks.joined(separator: "\n\n")
         let userPrompt = """
         Below are responses from multiple AI models to the same conversation thread.
 
@@ -424,7 +411,63 @@ final class CompareViewModel: ObservableObject {
         }
     }
 
+    /// Runs a free-form custom prompt against all model responses and returns
+    /// the plain-text result. Throws with a user-readable message on failure.
+    func runCustomSynthesis(promptText: String, using provider: AIProvider) async throws -> String {
+        let apiKey = apiKeysByProvider[provider] ?? ""
+        let model  = selectedModel(for: provider)
+        guard !apiKey.isEmpty, !model.isEmpty else {
+            throw SynthesisError("\(provider.displayName) is not configured.")
+        }
+        guard let body = buildResponseBody() else {
+            throw SynthesisError("No successful responses found to analyse.")
+        }
+        let fullPrompt = """
+        Below are responses from multiple AI models to the same conversation thread.
+
+        \(body)
+
+        \(promptText)
+        """
+        let messages = [ChatMessage(role: .user, text: fullPrompt, attachments: [])]
+        var chunks: [String] = []
+        let stream = serviceFactory(provider, apiKey).generateReplyStream(
+            modelID: model,
+            systemInstruction: "",
+            messages: messages,
+            latestUserAttachments: []
+        )
+        for try await chunk in stream { chunks.append(chunk.text) }
+        return chunks.joined().trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    // MARK: - Synthesis helpers
+
+    /// Collects successful responses from all providers into a labelled text block.
+    /// Returns nil when there are no successful responses to work with.
+    private func buildResponseBody() -> String? {
+        var responseBlocks: [String] = []
+        for p in AIProvider.allCases {
+            var parts: [String] = []
+            for run in runsChronological {
+                guard let result = run.results[p],
+                      result.state == .success,
+                      !result.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                else { continue }
+                parts.append("Q: \(run.prompt)\nA: \(result.text)")
+            }
+            guard !parts.isEmpty else { continue }
+            responseBlocks.append("=== \(p.displayName) ===\n\(parts.joined(separator: "\n\n"))")
+        }
+        return responseBlocks.isEmpty ? nil : responseBlocks.joined(separator: "\n\n")
+    }
+
     // MARK: - Synthesis cache helpers
+
+    private struct SynthesisError: LocalizedError {
+        let errorDescription: String?
+        init(_ message: String) { errorDescription = message }
+    }
 
     /// True when the cached synthesis exists but new runs have been added since it ran.
     var isSynthesisStale: Bool {
@@ -450,6 +493,33 @@ final class CompareViewModel: ObservableObject {
             synthesisedAt: Date(),
             provider: provider
         )
+        persistSavedConversations()
+    }
+
+    /// Cached custom-analysis result for a given prompt ID in the current
+    /// conversation (or nil if the prompt hasn't been run for this conversation).
+    func cachedCustomResult(promptID: UUID) -> CachedCustomSynthesis? {
+        guard let id = selectedConversationID,
+              let conv = savedConversations.first(where: { $0.id == id }) else { return nil }
+        return conv.cachedCustomResults?.first(where: { $0.id == promptID })
+    }
+
+    /// Persists a custom-analysis result against the current conversation,
+    /// replacing any existing cache for the same prompt ID.
+    func saveCustomSynthesisCache(promptID: UUID, resultText: String, provider: AIProvider) {
+        guard let convID = selectedConversationID,
+              let index = savedConversations.firstIndex(where: { $0.id == convID }) else { return }
+        let cached = CachedCustomSynthesis(
+            id: promptID,
+            resultText: resultText,
+            runIDs: Set(runs.map(\.id)),
+            synthesisedAt: Date(),
+            provider: provider
+        )
+        var existing = savedConversations[index].cachedCustomResults ?? []
+        existing.removeAll { $0.id == promptID }
+        existing.append(cached)
+        savedConversations[index].cachedCustomResults = existing
         persistSavedConversations()
     }
 

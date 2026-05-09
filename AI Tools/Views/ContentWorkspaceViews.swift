@@ -1307,31 +1307,34 @@ struct UsageStatsSheet: View {
 
 // MARK: - Compare Synthesis Sheet
 
+private enum CustomSynthesisJobState: Equatable {
+    case idle
+    case running
+    case success(String)
+    case failed(String)
+}
+
 struct CompareSynthesisView: View {
     @ObservedObject var compareViewModel: CompareViewModel
     @Environment(\.dismiss) private var dismiss
     @State private var selectedProvider: AIProvider = AIProvider.allCases.first!
+    @State private var customPrompts: [CustomSynthesisPrompt] = []
+    @State private var customStates: [UUID: CustomSynthesisJobState] = [:]
+
+    private let customPromptsKey = "customSynthesisPrompts"
 
     var body: some View {
         VStack(spacing: 0) {
             // Header
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Synthesise Responses")
+                    Text("Analyse Responses")
                         .font(.title2.weight(.semibold))
-                    Text("Collapses all model responses into consensus, disagreements, unique points, and suspicious claims.")
+                    Text("Run built-in or custom analyses across all model responses in this thread.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-                if case .success(let result) = compareViewModel.synthesisState {
-                    PDFExportButton(filename: "synthesis.pdf") {
-                        PDFBuilder.synthesisResult(result)
-                    }
-                    .buttonStyle(.plain)
-                    .font(.title2)
-                    .foregroundStyle(AppTheme.brandTint)
-                }
                 Button { dismiss() } label: {
                     Image(systemName: "xmark.circle.fill")
                         .font(.title2)

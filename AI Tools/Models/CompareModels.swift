@@ -62,11 +62,28 @@ struct CachedSynthesis: Codable {
     let provider:       AIProvider
 }
 
+// Snapshot of a custom (free-form) analysis result for a single prompt.
+// `id` matches the CustomSynthesisPrompt.id so results can be looked up by prompt.
+struct CachedCustomSynthesis: Identifiable, Codable {
+    let id:             UUID
+    let resultText:     String
+    let runIDs:         Set<UUID>
+    let synthesisedAt:  Date
+    let provider:       AIProvider
+}
+
 enum SynthesisState {
     case idle
     case synthesizing
     case success(SynthesisResult)
     case failed(String)
+}
+
+// User-defined analysis prompt persisted across sessions.
+struct CustomSynthesisPrompt: Identifiable, Codable, Equatable {
+    var id: UUID = UUID()
+    var title: String
+    var promptText: String
 }
 
 // MARK: - Compare models
